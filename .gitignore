@@ -1,0 +1,8 @@
+# ignore development files
+dev
+
+# ignore examples folder
+examples
+
+# ignore .RData files
+*.RData
