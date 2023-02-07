@@ -1,6 +1,7 @@
 # Returns predictions at X.pred.orig using the calibration parameters theta. To do this
-# the emulator must be 'fit' at theta.
-predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples=1)#, SC=T)
+# the emulator must be 'fit' at theta. If no theta is given, it is assumed to be an emulation
+# only model.
+predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples=1)
 {
   n.pc = flagp$basis$sim$n.pc
   y=NULL
@@ -46,34 +47,6 @@ predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples
     w$sample=w$mean
   }
   return(w)
-}
-
-# This function is for predicting an laGP delta model
-predict_v = function(flagp,delta,X.pred.orig=NULL,start=6,end=50,sample=F,n.samples=1)
-{
-  n.pc = ncol(flagp$basis$obs$D)
-  y=NULL
-  if(!is.null(X.pred.orig)){
-    n.x.pred = nrow(X.pred.orig)
-  } else{
-    n.x.pred = 1
-  }
-
-  X = transform_xt(X.sim = flagp$XT.data$sim$X$orig,
-                   X.obs = X.pred.orig)
-  v = aGPsep_SC_mv(X=X$obs$X$trans,
-                   Z=delta$V.t,
-                   XX=X$obs$X$trans,
-                   start=start,
-                   end=end,bias=T)
-
-  if(sample){
-    v$sample = mvtnorm::rmvnorm(n.samples,as.numeric(v$mean),diag(as.numeric(v$var)))
-    dim(v$sample) = c(n.samples,dim(v$mean))
-  } else{
-    v$sample=v$mean
-  }
-  return(v)
 }
 
 mv_delta_predict = function(X.pred.orig,delta,flagp,sample=F,n.samples=1, start=6, end=50)
