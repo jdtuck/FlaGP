@@ -152,6 +152,7 @@ predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=
     cat('No calibration model, emulation only prediction.')
     if(is.null(X.pred.orig))
       stop('must give X.pred.orig') 
+    pred = em_only_predict(flagp,X.pred.orig,n.samples,return.samples,support,end.eta)
   }
   return(pred)
 }

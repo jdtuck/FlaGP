@@ -418,7 +418,7 @@ sc_inputs = function(X,ls){
 #'
 flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                              # X and T data
                     Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scaletype='scalar', # Y data
-                    n.pc = NULL, pct.var = .95, B = NULL, sigma.y=NULL,                           # sim basis
+                    n.pc = 1, pct.var = NULL, B = NULL, sigma.y=NULL,                           # sim basis
                     sc.nugget=1e-7, sc.subsample = F, sc.subsample.size = 250, ls.prior=T,      # length scale estimation
                     bias=F,D=NULL,small=F,precomp=T,verbose=F){
   start.time = proc.time()
