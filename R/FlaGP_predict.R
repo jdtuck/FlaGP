@@ -149,7 +149,6 @@ predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=
       stop('model must be of class mcmc or map')
     }
   } else{
-    cat('No calibration model, emulation only prediction.')
     if(is.null(X.pred.orig))
       stop('must give X.pred.orig') 
     pred = em_only_predict(flagp,X.pred.orig,n.samples,return.samples,support,end.eta)
@@ -311,14 +310,17 @@ em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, 
   returns = list()
   n.pred = nrow(X.pred.orig)
   # get predictive samples of w at X.pred.orig
-  w = predict_w(flagp,X.pred.orig,end=end.eta,sample=T,n.samples)
+  w = predict_w(flagp,X.pred.orig,end=end.eta,sample=T,n.samples=n.samples)
 
   # convert samples of w to samples of y on native scale
   returns$y.samp = array(0,dim=c(n.samples,flagp$Y.data$sim$n.y,n.pred))
-  returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample)
-  for(j in 1:n.pred){
-      returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+  for(i in 1:n.samples){
+    returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample[i,,])
+    for(j in 1:n.pred){
+        returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+    }
   }
+  
   returns$time = proc.time()[3] - start.time
   returns$y.mean = apply(returns$y.samp,2:3,mean)
   returns$y.conf.int = apply(returns$y.samp,2:3,quantile,c(.025,.975))
