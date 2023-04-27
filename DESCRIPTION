@@ -1,8 +1,8 @@
 Package: FlaGP
-Title: Fast Emualation and Calibration for Functional Response Computer Models
+Title: Fast Emulation and Calibration for Functional Response Computer Models
 Version: 0.0.0.9000
 Authors@R: 
-    person("Grant", "Hutchings", , "grant.hutchings@lanl.gov", role = c("aut", "cre"),
+    person("Grant", "Hutchings", , "gch2@sfu.ca", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
 Description: What the package does (one paragraph).
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
@@ -14,4 +14,4 @@ Imports: laGP, mvtnorm, parallel, pracma, crs, abind, lhs, yaImpute
 NeedsCompilation: no
 Packaged: 2023-01-30 23:21:23 UTC; grant
 Author: Grant Hutchings [aut, cre] (YOUR-ORCID-ID)
-Maintainer: Grant Hutchings <grant.hutchings@lanl.gov>
+Maintainer: Grant Hutchings <gch2@sfu.ca>
