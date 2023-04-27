@@ -1,0 +1,80 @@
+---
+title: "Ball Drop Example, No Bias"
+author: "Grant Hutchings"
+date: "2/23/2022"
+output: pdf_document
+---
+
+In this example we consider the experiment of dropping different sized balls from a tower and recording the time at certain distances during the fall. We will generate time data at distance traveled d from the equation $$
+t(d) = \frac{acosh(\exp\{Cd/R\})}{\sqrt{Cg/R}}
+$$ where $C$ is the coefficient of drag, $R$ is the radius of the ball, and $g$ is the gravitational constant. The computer simulations will be evaluated over a space filling design of $(R,C,g)$ tuples in the domain $R\in(.025,.3),\;C\in(.05,.15),\;g\in(7.8,10.8)$.
+
+During this tutorial we will detail how to do emulation, calibration, and prediction using our library functions.
+
+```{r , echo=FALSE}
+d_at_t = function(C,t,m,g){
+  return((1/C)*log(cosh(t/(sqrt(m/(g*C))))))
+}
+
+p.x = 3
+m = 10082
+
+# sim data
+set.seed(11)
+X.sim = lhs::create_oalhs(m,p.x,T,F)
+X.range = matrix(c(.1,5,.01,.5,8,12),nrow=p.x,ncol=2,byrow = T)
+X.sim[,1] = X.sim[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
+X.sim[,1] = X.sim[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
+X.sim[,2] = X.sim[,2] * (X.range[2,2]-X.range[2,1]) + X.range[2,1]
+y.ind.sim = as.matrix(seq(0,5,.1))
+Y.sim = matrix(nrow=length(y.ind.sim),ncol=m)
+for(i in 1:m){
+  Y.sim[,i] = d_at_t(C=X.sim[i,2],t=y.ind.sim,m=X.sim[i,1],g=X.sim[i,3])
+}
+```
+
+```{r build FlaGP data object}
+flagp.data = flagp(X.sim=X.sim,Y.sim=Y.sim,y.ind.sim = y.ind.sim,
+                  center = T, scaletype = 'scalar', n.pc = 2, verbose = T,
+                  sc.subsample = 500)
+```
+
+```{r, echo=F}
+plot(flagp.data,xlab='time (s)',ylab='distance (m)')
+```
+
+# Prediction
+
+```{r, echo=F}
+set.seed(11)
+n.pred = 16
+X.pred = lhs::create_oalhs(n.pred,p.x,T,F)
+X.pred[,1] = X.pred[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
+X.pred[,1] = X.pred[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
+X.pred[,2] = X.pred[,2] * (X.range[2,2]-X.range[2,1]) + X.range[2,1]
+Y.pred = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
+for(i in 1:ncol(Y.pred)){
+  Y.pred[,i] = (d_at_t(C=X.pred[i,2],t=y.ind.sim,m=X.pred[i,1],g=X.pred[i,3]) - flagp.data$Y.data$sim$mean) / flagp.data$Y.data$sim$sd[1]
+}
+
+flagp.pred = predict(flagp.data,
+                     X.pred.orig=X.pred,
+                     support = "sim",
+                     n.samples = 1000,
+                     return.samples = F,
+                     conf.int = F, native = F,
+                     end.eta = 750, ann=F)
+cat('pred time NN:',flagp.pred$pred.time[3],'s \n')
+cat('RMSE NN:',mean(sqrt((flagp.pred$y.mean - Y.pred)^2)),'\n')
+
+# now time with ANN
+flagp.pred.ann = predict(flagp.data,
+                     X.pred.orig=X.pred,
+                     support = "sim",
+                     n.samples = 1000,
+                     return.samples = F,
+                     conf.int = F, native = F,
+                     end.eta = 750, ann=T)
+cat('pred time ANN:',flagp.pred.ann$pred.time[3],'s \n')
+cat('RMSE ANN:',mean(sqrt((flagp.pred.ann$y.mean - Y.pred)^2)),'\n')
+```

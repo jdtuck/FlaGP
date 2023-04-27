@@ -97,10 +97,8 @@ plot_basis = function(b,y.ind.sim,legend=T,xlab='x')
     }
   } else{
     if(n.pc>1){
-      if(is.null(labels)){
-        labels = paste0('PC',1:n.pc)
-      }
-      pairs(t(w),col=rep('blue',m),pch=1,labels=labels,
+      labs = paste0('PC',1:n.pc)
+      pairs(t(w),col=rep('blue',m),pch=1,labels=labs,
             oma=c(3,3,3,15),asp=1)
       if(legend){
         par(xpd = TRUE)
@@ -130,17 +128,30 @@ plot_basis = function(b,y.ind.sim,legend=T,xlab='x')
 #' # See examples folder for R markdown notebooks.
 #'
 plot.flagp = function(flagp,basis=T,legend=T,xlab='x',ylab='y',...){
-  if(ncol(flagp$Y.data$sim$ind == 1 & ncol(flagp$Y.data$obs$ind) == 1 )){
+  if(ncol(flagp$Y.data$sim$ind == 1)){
     par(mfrow=c(1,2),mar=c(4,4,4,.3))
     matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$orig,type='l',col='orange',xlab=xlab,ylab=ylab,main='Original Scale',...)
-    matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,pch=1,add=T,col='black',...)
-    matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,type='l',lty=1,add=T,col='black',...)
+    if(!is.null(flagp$Y.data$obs)){
+      if(ncol(flagp$Y.data$obs$ind) == 1){
+        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,pch=1,add=T,col='black',...)
+        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,type='l',lty=1,add=T,col='black',...)
+      }
+    }
     legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
 
     matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$trans,type='l',col='orange',xlab=xlab,ylab=ylab,main='Standardized Scale',...)
-    matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,pch=1,add=T,col='black',...)
-    matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,type='l',lty=1,add=T,col='black',...)
-    legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
+    if(!is.null(flagp$Y.data$obs)){
+      if(ncol(flagp$Y.data$obs$ind) == 1){
+        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,pch=1,add=T,col='black',...)
+        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,type='l',lty=1,add=T,col='black',...)
+      }
+    }
+
+    if(!is.null(flagp$Y.data$obs)){
+      legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
+    } else{
+      legend('topleft',inset=c(.05,.05),legend=c('simulations'),lty=1,col=c('orange'),...)
+    }
   }else{
     stop('Default data visualization not implemented for 2-D functions.')
   }

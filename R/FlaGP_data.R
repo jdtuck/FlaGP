@@ -226,7 +226,12 @@ unit_xform = function(X,X.min=NULL,X.range=NULL){
 
 transform_y = function(Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scale=T,scaletype='scalar'){
   sim.list = list()
-  obs.list = list()
+  if(!is.null(Y.obs)){
+    obs.list = list()
+  } else{
+    obs.list = NULL
+  }
+
 
   n.y.sim = nrow(Y.sim)
   if(is.null(y.ind.sim))
@@ -421,7 +426,7 @@ sc_inputs = function(X,ls){
 #' @param ls.prior use detault prior in laGP::newGP for MAP lengthscale estimation, if FALSE, MLE estimation
 #' @param bias calibration with a discrepancy model
 #' @param D matrix of basis vectors for discrepancy model
-#' @param small return small (memory) data object 
+#' @param small return small (memory) data object
 #' @param verbose print status updates while building data object and doing precomputing
 #' @details Returns FlaGP data object
 #' @export
@@ -437,10 +442,10 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
   cat('Building FlaGP data object.\n')
   cat('m:', ncol(Y.sim),'\n')
   cat('n:', max(0,ncol(Y.obs)),'\n')
-  if(is.null(pct.var)){
-    cat('n.pc:', n.pc,'\n')
-  } else{
+  if(is.null(n.pc)){
     cat('pct.var:', pct.var,'\n')
+  } else{
+    cat('n.pc:', n.pc,'\n')
   }
   cat('p.x:',max(0,ncol(X.sim)),'\n')
   cat('p.t:',max(0,ncol(T.sim)),'\n')

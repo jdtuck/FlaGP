@@ -207,10 +207,10 @@ map_predict = function(flagp,map,X.pred.orig=NULL,n.samples=1,return.samples=F,s
     }
     returns$y.samp = eta.samp + delta.samp
     returns$time = proc.time()[3] - start.time
-    returns$y.mean = apply(y.samp,c(1,3),mean) # do i need to compute this or just add eta.mean to delta.mean?
+    returns$y.mean = apply(returns$y.samp,c(1,3),mean) # do i need to compute this or just add eta.mean to delta.mean?
     returns$eta.mean = apply(eta.samp,c(1,3),mean)
     returns$delta.mean = apply(delta.samp,c(1,3),mean)
-    returns$y.conf.int = apply(y.samp,c(1,3),quantile,c(.025,.975))
+    returns$y.conf.int = apply(returns$y.samp,c(1,3),quantile,c(.025,.975))
     if(!return.samples)
       returns$y.samp = NULL
   }

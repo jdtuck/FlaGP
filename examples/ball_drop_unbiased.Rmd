@@ -1,0 +1,123 @@
+---
+title: "Ball Drop Example, No Bias"
+author: "Grant Hutchings"
+date: "2/23/2022"
+output: pdf_document
+---
+
+In this example we consider the experiment of dropping different sized balls from a tower and recording the time at certain distances during the fall. We will generate time data at distance traveled d from the equation $$
+t(d) = \frac{acosh(\exp\{Cd/R\})}{\sqrt{Cg/R}}
+$$ where $C$ is the coefficient of drag, $R$ is the radius of the ball, and $g$ is the gravitational constant. We will generate both field observations and computer simulation data from this function. Five sets of field observations will use the values $C=.1,\;g=9.8$ and $R=\{.05,.1,.15,.2,.25\;(m)\}$, while computer simulations will be evaluated over a space filling design of $(R,C,g)$ tuples in the domain $R\in(.025,.3),\;C\in(.05,.15),\;g\in(7.8,10.8)$. The drag coefficient and the gravitational constant are parameters to be calibrated while $R$ is a controlled input.
+
+During this tutorial we will detail how to do emulation, calibration, and prediction using our library functions.
+
+```{r , echo=FALSE}
+C_true = .24
+g_true = 9.8
+sd_true = .1
+d_at_t = function(C,t,m,g){
+  return((1/C)*log(cosh(t/(sqrt(m/(g*C))))))
+}
+
+p.x = 1
+p.t = 2
+n = 5
+m = 242
+
+# sim data
+set.seed(11)
+XT.sim = lhs::create_oalhs(m,p.t+p.x,T,F)
+X.range = c(.1,5) # mass of ball in kg
+T.range = matrix(c(.01,.5,8,12),nrow=p.t,ncol=2,byrow = T)
+X.sim=as.matrix(XT.sim[,1]); X.sim = X.sim * (X.range[2]-X.range[1]) + X.range[1]
+T.sim=as.matrix(XT.sim[,2:3])
+T.sim[,1] = T.sim[,1] * (T.range[1,2]-T.range[1,1]) + T.range[1,1]
+T.sim[,2] = T.sim[,2] * (T.range[2,2]-T.range[2,1]) + T.range[2,1]
+rm(XT.sim)
+y.ind.sim = as.matrix(seq(0,5,.1))
+Y.sim = matrix(nrow=length(y.ind.sim),ncol=m)
+for(i in 1:m){
+  Y.sim[,i] = d_at_t(C=T.sim[i,1],t=y.ind.sim,m=X.sim[i],g=T.sim[i,2])
+}
+# obs data
+X.obs = as.matrix(rep(seq(.5,4.5,length.out=n)))
+T.obs = matrix(c(rep(C_true,n),rep(g_true,n)),nrow=n,ncol=2)
+y.ind.obs = as.matrix(seq(0,5,.5))
+Y.obs = matrix(nrow=length(y.ind.obs),ncol=n)
+for(i in 1:n){
+    Y.obs[,i] = d_at_t(C=C_true,t=y.ind.obs,m=X.obs[i],g=g_true) + rnorm(length(y.ind.obs),0,sd_true)
+}
+```
+
+```{r build FlaGP data object}
+flagp.data = flagp(X.sim,T.sim,X.obs,T.obs,Y.sim,y.ind.sim,Y.obs,y.ind.obs,n.pc = 3)
+```
+
+```{r plot data}
+plot(flagp.data,xlab='time (s)',ylab='distance (m)')
+```
+
+# Calibrate C
+
+```{r mcmc, echo=F}
+flagp.mcmc = mcmc(flagp.data, n.samples=10000, n.burn = 0, end.eta = 25)
+```
+
+# Plot MCMC results for diagnostics
+```{r plot mcmc, echo=F}
+plot(flagp.mcmc,labels=c("C","g"))
+```
+
+```{r fast point estimate, echo=F}
+flagp.map = map(flagp.data,n.restarts = 10,end.eta = 25)
+flagp.map$theta.hat
+```
+
+# Prediction at observed locations
+
+We now show how to predict from our emulator at both observed and new input settings. Since our emulator is not trained on the observed data, predictive assessment at $\texttt{X.obs}$ is of interest. Here we find that prediction using the point estimate and mcmc samples are nearly identical in both mean and uncertainty.
+
+Prediction using mcmc results is done with the function `ypred_mcmc()` passing in a matrix of samples of $t^*$ to use for prediction. We also specify that we would like to predict on the full support of heights from $1m$ to $25m$ by setting $\texttt{support='sim'}$. $\texttt{support='obs'}$ will return predictions only at the points $\texttt{y.ind.obs}$.
+
+```{r, echo=F}
+X.pred = matrix(c(.75,1.75,2.75,3.75))
+flagp.pred.mcmc = predict(flagp.data,flagp.mcmc,
+                           X.pred.orig=X.pred,
+                           samp.ids = as.integer(seq(1001,10000,length.out=1000)),
+                           support = "sim",
+                           return.samples = T)
+flagp.pred.map = predict(flagp.data,flagp.map,
+                         X.pred.orig=X.pred,
+                         n.samples=1000,
+                         support = "sim",
+                         return.samples = T)
+```
+
+```{r, compare predictions to data}
+true_dat = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
+for(i in 1:ncol(true_dat)){
+  true_dat[,i] = d_at_t(C_true,y.ind.sim,X.pred[i],g_true)
+}
+
+matplot(flagp.pred.map$y.mean,type='l',lty=2,main='MAP')
+matplot(true_dat,type='l',lty=1,add=T)
+matplot(flagp.pred.map$y.conf.int[1,,],type='l',lty=3,add=T)
+matplot(flagp.pred.map$y.conf.int[2,,],type='l',lty=3,add=T)
+
+matplot(flagp.pred.mcmc$y.mean,type='l',lty=2,main='MCMC')
+matplot(true_dat,type='l',lty=1,add=T)
+matplot(flagp.pred.mcmc$y.conf.int[1,,],type='l',lty=3,add=T)
+matplot(flagp.pred.mcmc$y.conf.int[2,,],type='l',lty=3,add=T)
+
+# RMSE
+rmse.mcmc = sqrt(mean((flagp.pred.mcmc$y.mean-true_dat)^2))
+rmse.map = sqrt(mean((flagp.pred.map$y.mean-true_dat)^2))
+
+# Interval Score
+is.mcmc = mean(FlaGP:::interval_score(true_dat,y.conf=flagp.pred.mcmc$y.conf.int))
+is.map = mean(FlaGP:::interval_score(true_dat,y.conf=flagp.pred.map$y.conf.int))
+
+cat('mcmc prediction scores:\nrmse:',rmse.mcmc,'\ninterval score:',is.mcmc,'\n')
+cat('map prediction scores:\nrmse:',rmse.map,'\ninterval score:',is.map,'\n')
+```
+
