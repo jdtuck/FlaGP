@@ -1,5 +1,5 @@
 Package: FlaGP
-Title: What the Package Does (One Line, Title Case)
+Title: Fast Emualation and Calibration for Functional Response Computer Models
 Version: 0.0.0.9000
 Authors@R: 
     person("Grant", "Hutchings", , "grant.hutchings@lanl.gov", role = c("aut", "cre"),
