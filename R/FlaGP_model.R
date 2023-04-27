@@ -146,9 +146,12 @@ fit_delta = function(y.resid,D,XT.data,sample=T,lagp=F,start=6,end=50){
 # mv_calib.nobias: unbiased calibration
 # mv.em.pred: laGP emulator prediction function at new inputs
 }
-aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F){#, SC=T){
+aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, ann = T){
+
   n.pc = nrow(Z)
   n.XX = ifelse(bias,nrow(XX),nrow(XX[[1]]))
+  mean = array(dim=c(n.pc,n.XX))
+  var = array(dim=c(n.pc,n.XX))
 
   if(bias){
     # if we use laGP for the bias, we cannot use stretched an compressed inputs anymore
@@ -160,34 +163,40 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F){
                                                 method = 'alc',
                                                 verb=0))
   } else{
-    #if(SC){
-    lagp_fit = lapply(1:n.pc,function(i) laGP::aGPsep(X = X[[i]],
-                                                Z = Z[i,],
-                                                XX = XX[[i]],
-                                                d = list(mle = FALSE, start = 1),
-                                                g = g,
-                                                end = min(end,ncol(Z)-1),
-                                                method = 'nn',
-                                                verb=0))
-    # } else{
-    #   cat('here')
-    #   lagp_fit = lapply(1:n.pc,function(i) laGP::aGPsep(X = X,
-    #                                               Z = Z[i,],
-    #                                               XX = XX,
-    #                                               g = g,
-    #                                               start = start,
-    #                                               end = min(end,ncol(Z)-1),
-    #                                               method = 'alc',
-    #                                               verb=0))
-    # }
+    if(!ann){
+      lagp_fit = lapply(1:n.pc,function(i) laGP::aGP(
+        X = X[[i]],
+        Z = Z[i,],
+        XX = XX[[i]],
+        d = list(mle = FALSE, start = 1),
+        g = g,
+        end = min(end,ncol(Z)-1),
+        method = 'nn',
+        verb=0))
+
+      for (i in 1:n.pc) {
+        mean[i,] = lagp_fit[[i]]$mean
+        var[i,] = lagp_fit[[i]]$var
+      }
+    } else{
+      # compute neighbors using ANN
+      nn.indx = lapply(1:n.pc,function(i) yaImpute::ann(X[[i]],XX[[i]],end,verbose=F)$knnIndexDist[,1:end])
+      for(j in 1:n.XX){
+        lagp_fit = lapply(1:n.pc,function(i) laGP::newGP(
+          X = X[[i]][nn.indx[[i]][j,],],
+          Z = Z[i,nn.indx[[i]][j,]],
+          d = 1,
+          g = g))
+        lagp_pred = lapply(1:n.pc,function(i) laGP::predGP(lagp_fit[[i]],XX[[i]][j,,drop=F],lite=T))
+        for(i in 1:n.pc){
+          mean[i,j] = lagp_pred[[i]]$mean
+          var[i,j] = lagp_pred[[i]]$s2
+          laGP::deleteGP(lagp_fit[[i]])
+        }
+      }
+    }
   }
 
-  mean = array(dim=c(n.pc,n.XX))
-  var = array(dim=c(n.pc,n.XX))
-  for (i in 1:n.pc) {
-    mean[i,] = lagp_fit[[i]]$mean
-    var[i,] = lagp_fit[[i]]$var
-  }
   if(sample){
     sample = mvtnorm::rmvnorm(1,as.numeric(mean),diag(as.numeric(var)))
     dim(sample) = dim(mean)

@@ -25,13 +25,13 @@ w_to_y = function(w,B,mean=NULL,sd=NULL){
 # user when generating sim basis
 # mv_calib.bias for generating discrepancy basis
 }
-get_basis = function(Y, n.pc = 1, pct.var = NULL, full.basis=F, B=NULL, bias=F, D=NULL,
+get_basis = function(Y, n.pc = NULL, pct.var = .95, full.basis=F, B=NULL, V.t = NULL, bias=FALSE, D=NULL,
                      rsvd=FALSE, k = NULL, nu = NULL, nv = NULL, p = 10, q = 2, sdist = "normal"){
 
   return.list = list()
 
   # Compute SVD
-  nExp = ncol(Y)
+  nExp = ncol(Y) # number of experiments or simulations
   if(is.null(B)){
     ptm = proc.time()[3]
     if(!rsvd){
@@ -45,7 +45,7 @@ get_basis = function(Y, n.pc = 1, pct.var = NULL, full.basis=F, B=NULL, bias=F, 
 
     # Return only the required number of basis vectors
     percent.variance = zapsmall((svdY$d) / sum(svdY$d))
-    if(!is.null(pct.var)){
+    if(!is.null(pct.var) & is.null(n.pc)){
       # percentage of variance explained specified
       n.pc = which.max(cumsum(percent.variance)>=pct.var)
     }
@@ -64,7 +64,9 @@ get_basis = function(Y, n.pc = 1, pct.var = NULL, full.basis=F, B=NULL, bias=F, 
     # manual basis matrix was passed
     return.list$B = B
     return.list$n.pc = ncol(B)
-    return.list$V.t = solve(t(B)%*%B)%*%t(B)%*%Y
+    return.list$V.t = V.t
+    if(is.null(V.t))
+      return.list$V.t = solve(t(B)%*%B)%*%t(B)%*%Y
   }
 
   if(bias & is.null(D)){
@@ -142,14 +144,14 @@ get_obs_basis = function(sim.basis,Y.obs,y.ind.sim,y.ind.obs,sigma.y=NULL){
 # X (numeric) : untransformed matrix of inputs
 # V.t (numeric) : matrix
 # ls_prior_ab (numeric) : 2 vector of parameters for gamma prior on length-scales
-mv_lengthscales = function(XT.data,V.t,g=1e-7,subsample=F,subsample.size=100,seed=NULL,ls.prior=F){
+mv_lengthscales = function(XT.data,V.t,g=1e-7,subsample=NULL,seed=NULL,ls.prior=F){
   ptm = proc.time()
   XT = cbind(XT.data$sim$X$trans,XT.data$sim$T$trans)
-  if(subsample){
+  if(!is.null(subsample)){
     if(!is.null(seed)){
       set.seed(seed)
     }
-    samp.id = sample(1:nrow(XT),subsample.size)
+    samp.id = sample(1:nrow(XT),subsample)
     XT = XT[samp.id,]
     V.t = V.t[,samp.id]
   }
@@ -169,14 +171,12 @@ mv_lengthscales = function(XT.data,V.t,g=1e-7,subsample=F,subsample.size=100,see
   }
   # try doParallel::foreach (not sure how to use it with pointers to C objects)
   cores = min(n.pc,parallel::detectCores()-4)
-  cl <- parallel::makeCluster(cores)
   estLenscales = parallel::mclapply(1:n.pc, function(i) laGP::mleGPsep(GPlist[[i]],param='d',
                                                       tmin = dConfig$min,
                                                       tmax = dConfig$max,
                                                       ab=dConfig$ab,
                                                       maxit=100)$d,
-                         mc.cores = parallel::detectCores())
-  parallel::stopCluster(cl)
+                                    mc.cores = cores)
   for(i in n.pc){
     laGP::deleteGPsep(GPlist[[i]])
   }
@@ -224,7 +224,7 @@ unit_xform = function(X,X.min=NULL,X.range=NULL){
               range=X.range))
 }
 
-transform_y = function(Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scale=T, scaletype='scalar'){
+transform_y = function(Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scale=T,scaletype='scalar'){
   sim.list = list()
   obs.list = list()
 
@@ -237,12 +237,12 @@ transform_y = function(Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,s
   sim.list$orig = Y.sim
   if(center){
     sim.list$mean = rowMeans(Y.sim)
+    sim.list$trans = sim.list$orig - sim.list$mean
   } else{
     sim.list$mean = rep(0,n.y.sim)
+    sim.list$trans = sim.list$orig
   }
 
-  # center
-  sim.list$trans = sim.list$orig - sim.list$mean
   # check
   if(center){
     if(!all(abs(rowMeans(sim.list$trans)) < 1e-8)){
@@ -256,27 +256,18 @@ transform_y = function(Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,s
       # dont scale places with var 0
       sim.list$sd[sim.list$sd==0]=1
     } else if(scaletype=='scalar') {
-      sd = sd(sim.list$trans)
+      if(center){
+        # we already centered data so we can compute the sd faster
+        sd = sum(sim.list$trans^2)/(prod(dim(sim.list$trans))-1)
+      } else{
+        # this is breaking for huge matrices
+        sd = sd(sim.list$trans)
+      }
       sim.list$sd = rep(sd,n.y.sim)
     }
+    sim.list$trans = sim.list$trans / sim.list$sd
   } else{
     sim.list$sd = rep(1,n.y.sim)
-  }
-
-  # scale
-  sim.list$trans = sim.list$trans / sim.list$sd
-
-  # check
-  if(scale){
-    if(scaletype=='rowwise'){
-      if(!all(abs(apply(sim.list$trans,1,sd)-1) < 1e8)){
-        stop('Y.sim not properly scaled to unit variance in rows \n')
-      }
-    } else if(scaletype=='scalar'){
-      if(!abs(sd(sim.list$trans)-1) < 1e-8){
-        stop('Y.sim not properly scaled to unit variance \n')
-      }
-    }
   }
 
   # scale Y.obs
@@ -411,37 +402,78 @@ sc_inputs = function(X,ls){
 #' @description Builds FlaGP data object and does necessary precomputing
 #' @param X.sim experimental inputs for simulator output data
 #' @param T.sim calibration inputs for simulator output data
+#' @param X.obs observed inputs for experimental data
+#' @param T.obs optional "known" calibration parameters for observations. This parameter does nothing in the model, but the data object will store scaled copies of it so it can be compared to calibration results
+#' @param Y.sim simulator output matrix
+#' @param y.ind.sim data indices for functional response simulations
+#' @param Y.obs observed data matrix
+#' @param y.ind.obs data indices for functional response observations
+#' @param center center simulations to mean zero
+#' @param scale scale simulations to unit variance
+#' @param scaletype "scalar" or "rowwise" scaling to unit variance. Functional outputs should likely use "scalar" and multivariate outputs with different units should use "rowwise"
+#' @param n.pc number of basis components to use for emulation. Defaults to 95% variance explained.
+#' @param pct.var choose number of basis components s.t. this proportion of variation is accounted for in simulations. Defaults to 95% variance explained.
+#' @param B optional precomputed matrix of basis vectors
+#' @param V.t optional precomputed matrix of simulation weights for B
+#' @param sigma.y assumed standard error of observations (not currently implemented)
+#' @param sc.nugget nugget used for lengthscale estimation GP
+#' @param sc.subsample size of subsample for lengthscale estimation. Default is NULL indicating all data is used for estimation.
+#' @param ls.prior use detault prior in laGP::newGP for MAP lengthscale estimation, if FALSE, MLE estimation
+#' @param bias calibration with a discrepancy model
+#' @param D matrix of basis vectors for discrepancy model
+#' @param small return small (memory) data object 
+#' @param verbose print status updates while building data object and doing precomputing
 #' @details Returns FlaGP data object
 #' @export
 #' @examples
 #' # See examples folder for R markdown notebooks.
 #'
-flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                              # X and T data
-                    Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scaletype='scalar', # Y data
-                    n.pc = 1, pct.var = NULL, B = NULL, sigma.y=NULL,                           # sim basis
-                    sc.nugget=1e-7, sc.subsample = F, sc.subsample.size = 250, ls.prior=T,      # length scale estimation
-                    bias=F,D=NULL,small=F,precomp=T,verbose=F){
+flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                                           # X and T data
+                    Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scale=T,scaletype='scalar', # Y data
+                    n.pc = NULL, pct.var = .95, B = NULL, V.t = NULL, sigma.y=NULL,                     # sim basis
+                    sc.nugget=1e-7, sc.subsample = NULL, ls.prior=T,                                    # length scale estimation
+                    bias=F,D=NULL,                                                                      # discrepancy
+                    small=F,verbose=F){                                                                 # additional flags
+  cat('Building FlaGP data object.\n')
+  cat('m:', ncol(Y.sim),'\n')
+  cat('n:', max(0,ncol(Y.obs)),'\n')
+  if(is.null(pct.var)){
+    cat('n.pc:', n.pc,'\n')
+  } else{
+    cat('pct.var:', pct.var,'\n')
+  }
+  cat('p.x:',max(0,ncol(X.sim)),'\n')
+  cat('p.t:',max(0,ncol(T.sim)),'\n')
+  cat('dim Y.sim:', dim(Y.sim),'\n')
+  cat('dim Y.obs:', dim(Y.obs),'\n')
+
   start.time = proc.time()
-  if(verbose){cat('transforming X, T \n')}
+  if(verbose){cat('transforming X,T... ')}
   XT.data = transform_xt(X.sim,T.sim,X.obs,T.obs)
-  if(verbose){cat('transforming Y \n')}
-  Y.data = transform_y(Y.sim,y.ind.sim,Y.obs,y.ind.obs,center,T,scaletype)
-  if(verbose){cat('computing sim basis \n')}
+  if(verbose){cat('done.\n')}
+  if(verbose){cat('transforming Y... ')}
+  Y.data = transform_y(Y.sim,y.ind.sim,Y.obs,y.ind.obs,center,scale,scaletype)
+  if(verbose){cat('done.\n')}
+  if(verbose){cat('computing sim basis... ')}
   basis = list(); class(basis) = c('basis',class(basis))
-  basis$sim = get_basis(Y.data$sim$trans,n.pc,pct.var,F,B,bias=bias,D=D)
+  basis$sim = get_basis(Y.data$sim$trans,n.pc,pct.var,F,B,V.t,bias=bias,D=D)
+  if(verbose){cat('done.\n')}
   if(!is.null(Y.obs)){
-    if(verbose){cat('computing obs basis \n')}
+    precomp = TRUE
+    if(verbose){cat('computing obs basis... ')}
     basis$obs = get_obs_basis(basis$sim,Y.data$obs$trans,y.ind.sim,y.ind.obs,sigma.y)
+    if(verbose){cat('done.\n')}
   } else{
     # em only
     basis$obs = NULL
     precomp = FALSE
   }
-  if(verbose){cat('estimating lengthscale parameters \n')}
-  ls = mv_lengthscales(XT.data,basis$sim$V.t,sc.nugget,sc.subsample,sc.subsample.size,ls.prior=ls.prior)
-  if(verbose){cat('stretching and compressing inputs \n')}
+  if(verbose){cat('estimating lengthscale parameters... ')}
+  ls = mv_lengthscales(XT.data,basis$sim$V.t,sc.nugget,sc.subsample,ls.prior=ls.prior)
+  if(verbose){cat('done.\n')}
+  if(verbose){cat('stretching and compressing inputs... ')}
   SC.inputs = get_SC_inputs(ls,XT.data,basis$sim$n.pc)
-
+  if(verbose){cat('done.\n')}
   data = list(XT.data=XT.data,
               Y.data=Y.data,
               basis = basis,
@@ -450,7 +482,7 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
               bias=bias)
 
   if(precomp){
-    if(verbose){cat('precomputing for fast calibration \n')}
+    if(verbose){cat('precomputing for fast calibration... ')}
     # do precomputing necessary for calibration
     precomp = list()
     precomp$I.n.y = diag(1,Y.data$obs$n.y)
@@ -463,6 +495,7 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
     precomp$BDtBDinvtBD = precomp$BDtBDinv%*%tBD
     precomp$LLHmat = precomp$I.n.y-BD%*%precomp$BDtBDinv%*%tBD
     data$precomp = precomp
+    if(verbose){cat('done.\n')}
   } else{
     data$precomp = NULL
   }
@@ -472,6 +505,7 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
     data$Y.data$sim$trans = NULL
   }
   data$time = proc.time() - start.time
+  # how can I return the objects in data without making a copy? I need to give it a class.
   class(data) = c('flagp',class(data))
   return(data)
 }

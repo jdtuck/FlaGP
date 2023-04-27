@@ -1,7 +1,7 @@
+
 # Returns predictions at X.pred.orig using the calibration parameters theta. To do this
-# the emulator must be 'fit' at theta. If no theta is given, it is assumed to be an emulation
-# only model.
-predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples=1)
+# the emulator must be 'fit' at theta.
+predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples=1,ann=T)
 {
   n.pc = flagp$basis$sim$n.pc
   y=NULL
@@ -37,7 +37,8 @@ predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples
                      Z=flagp$basis$sim$V.t,
                      XX=XX,
                      start=start,
-                     end=end,bias=flagp$bias)
+                     end=end,bias=flagp$bias,
+                     ann = ann)
   }
 
   if(sample){
@@ -47,6 +48,34 @@ predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples
     w$sample=w$mean
   }
   return(w)
+}
+
+# This function is for predicting an laGP delta model
+predict_v = function(flagp,delta,X.pred.orig=NULL,start=6,end=50,sample=F,n.samples=1)
+{
+  n.pc = ncol(flagp$basis$obs$D)
+  y=NULL
+  if(!is.null(X.pred.orig)){
+    n.x.pred = nrow(X.pred.orig)
+  } else{
+    n.x.pred = 1
+  }
+
+  X = transform_xt(X.sim = flagp$XT.data$sim$X$orig,
+                   X.obs = X.pred.orig)
+  v = aGPsep_SC_mv(X=X$obs$X$trans,
+                   Z=delta$V.t,
+                   XX=X$obs$X$trans,
+                   start=start,
+                   end=end,bias=T)
+
+  if(sample){
+    v$sample = mvtnorm::rmvnorm(n.samples,as.numeric(v$mean),diag(as.numeric(v$var)))
+    dim(v$sample) = c(n.samples,dim(v$mean))
+  } else{
+    v$sample=v$mean
+  }
+  return(v)
 }
 
 mv_delta_predict = function(X.pred.orig,delta,flagp,sample=F,n.samples=1, start=6, end=50)
@@ -92,26 +121,15 @@ mv_delta_predict = function(X.pred.orig,delta,flagp,sample=F,n.samples=1, start=
 
 #' @title FlaGP Prediction
 #'
-#' @description Calibrated prediction with \code{mcmc}, \code{map} object or Emulator only prediction when no model object is given.
+#' @description Prediction with \code{mcmc} or \code{map} object
 #' @param model an \code{mcmc} or \code{map} object.
-#' @param X.pred.orig a matrix of prediction locations where each row is a location
-#' @param n.samples number of predictive samples
-#' @param samp.ids mcmc indices for prediction, only vaid when model is an \code{mcmc} object
-#' @param return.samples return predictive samples. If FALSE, only mean and confidence interval are returned
-#' @param support should predictions be made on the observed (y.ind.obs) or simulation (y.ind.sim) support. Emulator only prediction is always on y.ind.sim
-#' @param eta.end number of nearest neighbors used for emulator prediction
-#' @param lagp.delta TRUE: fit bias model using laGP instead of a full GP
-#' @param start.delta starting neighborhood size for laGP bias model using laGP's \code{alc} method. Only valid if lagp.delta=TRUE.
-#' @param end.delta final neighborhood size for laGP bias model using laGP's \code{alc} method. Only valid if lagp.delta=TRUE.
-#' @param return.eta return emulator predictions separately
-#' @param return.delta return bias predictions separately
-#' @details Returns predictions of native response y at X.pred.orig
+#' @details Returns predictions at X.pred.orig
 #' @export
 #' @examples
-#' # See R markdown notebooks in the examples folder for demonstrations of this function.
+#' # See examples folder for R markdown notebooks.
 #'
 predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=NULL,return.samples=F,support='obs',
-                         end.eta=50,lagp.delta=F,start.delta=6,end.delta=50,return.eta=F,return.delta=F)
+                         end.eta=50,lagp.delta=F,start.delta=6,end.delta=50,return.eta=F,return.delta=F, native = T, conf.int=F, ann=T)
 {
   if(!is.null(model)){
     if(class(model)[1] == 'mcmc'){
@@ -122,10 +140,12 @@ predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=
       stop('model must be of class mcmc or map')
     }
   } else{
+    cat('No calibration model, emulation only prediction.')
     if(is.null(X.pred.orig))
-      stop('must give X.pred.orig') 
-    pred = em_only_predict(flagp,X.pred.orig,n.samples,return.samples,support,end.eta)
+      stop('must give X.pred.orig')
+    pred = em_only_predict(flagp,X.pred.orig,n.samples,return.samples,support,end.eta,native,conf.int,ann=ann)
   }
+
   return(pred)
 }
 
@@ -277,26 +297,29 @@ mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples 
   return(returns)
 }
 
-em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, support='obs', end.eta = 50)
+em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, support='obs', end.eta = 50, native = T, conf.int = F, ann = NULL)
 {
-  start.time = proc.time()[3]
+  start.time = proc.time()
   returns = list()
   n.pred = nrow(X.pred.orig)
   # get predictive samples of w at X.pred.orig
-  w = predict_w(flagp,X.pred.orig,end=end.eta,sample=T,n.samples=n.samples)
-
+  w = predict_w(flagp,X.pred.orig,end = end.eta,sample = T,n.samples = n.samples, ann = ann)
+  returns$w = w
   # convert samples of w to samples of y on native scale
   returns$y.samp = array(0,dim=c(n.samples,flagp$Y.data$sim$n.y,n.pred))
   for(i in 1:n.samples){
     returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample[i,,])
-    for(j in 1:n.pred){
+    if(native){
+      for(j in 1:n.pred){
         returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+      }
     }
   }
-  
-  returns$time = proc.time()[3] - start.time
+
+  returns$pred.time = proc.time() - start.time
   returns$y.mean = apply(returns$y.samp,2:3,mean)
-  returns$y.conf.int = apply(returns$y.samp,2:3,quantile,c(.025,.975))
+  if(conf.int)
+    returns$y.conf.int = apply(returns$y.samp,2:3,quantile,c(.025,.975))
   if(!return.samples)
     returns$y.samp = NULL
   return(returns)

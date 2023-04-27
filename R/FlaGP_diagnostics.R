@@ -31,9 +31,9 @@ energy_score = function(y.samp,y,terms=F){
 
   return(es)
 }
-
-# y.samp is a matrix of dim n.samp x n.y x n.pred
-# y.conf is a list of length n.pred with matrices of dim n.y x 2
+# y is a matrix of dim (n.y x n.pred)
+# y.samp is a matrix of dim (n.samp x n.y x n.pred)
+# y.conf is an array of dim (2 x n.y x n.pred)
 interval_score = function(y,alpha=.05,y.samp=NULL,y.conf.int=NULL,terms=F){
   if(!is.null(y.samp)){
     n = dim(y.samp)[3]
