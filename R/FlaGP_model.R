@@ -89,6 +89,7 @@ fit_delta = function(y.resid,D,XT.data,sample=T,lagp=F,start=6,end=50){
   } else{       # use full GP for the bias model
     GPs = vector(mode='list',length=n.pc)
     mle = vector(mode='list',length=n.pc)
+    #v$var = list()
     for(k in 1:n.pc){
       d = laGP::darg(d=list(mle=T),X=XT.data$obs$X$trans)
       g = garg(g=list(mle=T),y=V.t[k,])
@@ -105,14 +106,18 @@ fit_delta = function(y.resid,D,XT.data,sample=T,lagp=F,start=6,end=50){
       pred = laGP::predGPsep(GPs[[k]], XX = XT.data$obs$X$trans, lite=T)
       v$mean = rbind(v$mean, pred$mean)
       v$var = rbind(v$var, pred$s2)
+      #v$var[[k]] = pred$Sigma
       laGP::deleteGPsep(GPs[[k]])
     }
     returns$mle=mle
   }
   # new residuals (Y-emulator) - discrepancy estimate, this is mean zero
   if(sample){
-    v$sample = mvtnorm::rmvnorm(1,as.numeric(v$mean),diag(as.numeric(v$var)))
-    dim(v$sample) = dim(v$mean)
+    # sampling via cholesky where chol = sqrt(var)
+    v$sample = (rnorm(prod(dim(v$mean))) * sqrt(v$var)) + v$mean
+    #for(k in 1:n.pc){
+    #  v$sample = rbind(v$sample,mvtnorm::rmvnorm(1,mean=v$mean[k,],sigma=v$var[[k]]))
+    #}
   } else{
     v$sample = v$mean
   }
@@ -198,8 +203,8 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, 
   }
 
   if(sample){
-    sample = mvtnorm::rmvnorm(1,as.numeric(mean),diag(as.numeric(var)))
-    dim(sample) = dim(mean)
+    # sampling via cholesky where chol = sqrt(var)
+    sample = (rnorm(prod(dim(mean))) * sqrt(var)) + mean
   } else{
     sample = mean
   }

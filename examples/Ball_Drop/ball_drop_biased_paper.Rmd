@@ -1,0 +1,76 @@
+---
+title: "Ball Drop Example, Biased Simulator"
+author: "Grant Hutchings"
+date: "2/23/2022"
+output: pdf_document
+---
+
+This notebook reproduces the biased calibration results from the FlaGP paper
+
+```{r build FlaGP data object}
+load('data/bias_paper_data.RData')
+D = cbind(1,as.numeric(mvc.data$Y.data$sim$y.ind.sim))
+D = D/sqrt(max(t(D)%*%D))
+flagp.data = flagp(mvc.data$XT.data$sim$X$orig,mvc.data$XT.data$sim$T$orig,mvc.data$XT.data$obs$X$orig,mvc.data$XT.data$obs$T$orig,
+                   mvc.data$Y.data$sim$orig,mvc.data$Y.data$sim$y.ind.sim,mvc.data$Y.data$obs$orig,mvc.data$Y.data$obs$y.ind.obs,
+                           center = T, scaletype = 'scalar', n.pc = 2, verbose = T,bias = T, D = D)
+```
+
+```{r plot data}
+plot(flagp.data,xlab='time (s)',ylab='distance (m)')
+```
+
+# Calibrate C
+
+```{r mcmc, echo=F}
+flagp.mcmc = mcmc(flagp.data, n.samples = 10000, n.burn = 1000, end.eta = 50, theta.prior = 'unif')
+flagp.mcmc$time
+```
+
+# Plot MCMC results for diagnostics
+```{r plot mcmc, echo=F}
+plot(flagp.mcmc,labels=c("C","g"),xlim=c(0,1))
+```
+
+```{r fast point estimate, echo=F}
+flagp.map = map(flagp.data, n.restarts = 5, seed=11)
+flagp.map$theta.hat
+```
+
+# Prediction at new locations
+
+```{r, echo=F}
+X.pred = matrix(seq(.5,4,length.out=3))
+
+y.pred.mcmc = predict(flagp.data,flagp.mcmc,X.pred,samp.ids = as.integer(seq(1,9000,length.out=1000)),support = 'sim',end.eta = 50)
+y.pred.map = predict(flagp.data,flagp.map,X.pred,n.samples=1000,support="sim", end.eta = 50)
+
+```
+
+```{r, compare predictions to data}
+true_dat = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
+for(i in 1:ncol(true_dat)){
+  true_dat[,i] = d_at_t(C_true,y.ind.sim,X.pred[i],g_true)
+}
+
+matplot(y.pred.map$y.mean,type='l',lty=2,main='MAP')
+matplot(true_dat,type='l',lty=1,add=T)
+matplot(y.pred.map$y.conf.int[1,,],type='l',lty=3,add=T)
+matplot(y.pred.map$y.conf.int[2,,],type='l',lty=3,add=T)
+
+matplot(y.pred.mcmc$y.mean,type='l',lty=2,main='MCMC')
+matplot(true_dat,type='l',lty=1,add=T)
+matplot(y.pred.mcmc$y.conf.int[1,,],type='l',lty=3,add=T)
+matplot(y.pred.mcmc$y.conf.int[2,,],type='l',lty=3,add=T)
+
+# RMSE
+rmse.mcmc = sqrt(mean((y.pred.mcmc$y.mean-true_dat)^2))
+rmse.map = sqrt(mean((y.pred.map$y.mean-true_dat)^2))
+
+# Interval Score
+is.mcmc = mean(FlaGP:::interval_score(true_dat,y.conf=y.pred.mcmc$y.conf.int))
+is.map = mean(FlaGP:::interval_score(true_dat,y.conf=y.pred.map$y.conf.int))
+
+cat('mcmc prediction scores:\nrmse:',rmse.mcmc,'\ninterval score:',is.mcmc,'\n')
+cat('map prediction scores:\nrmse:',rmse.map,'\ninterval score:',is.map,'\n')
+```

@@ -70,13 +70,13 @@ plot(flagp.data,xlab='time (s)',ylab='distance (m)')
 # Calibrate C
 
 ```{r mcmc, echo=F}
-flagp.mcmc = mcmc(flagp.data, n.samples = 10000,n.burn = 0)
+flagp.mcmc = mcmc(flagp.data, n.samples = 10000, n.burn = 1000, end.eta = 50, theta.prior = 'unif')
 flagp.mcmc$time
 ```
 
 # Plot MCMC results for diagnostics
 ```{r plot mcmc, echo=F}
-plot(flagp.mcmc,labels=c("C","g"))
+plot(flagp.mcmc,labels=c("C","g"),xlim=c(0,1))
 ```
 
 ```{r fast point estimate, echo=F}

@@ -196,14 +196,14 @@ plot.mcmc = function(x, labels=NULL, nrow=2, ncol=2, ...){
     par(mfrow=c(nrow,ncol))
     for(i in 1:p.t){
       plotlims = c(max(0,min(x$t.samp[,i])-.05),min(1,max(x$t.samp[,i])+.05))
-      plot(x$t.samp[,i],type='l',ylab=labels[i],xlab='MCMC iteration (post-burn)',ylim=plotlims, ...)
+      plot(x$t.samp[,i],type='l',ylab=labels[i],xlab='MCMC iteration (post-burn)',ylim=plotlims, xlim=c(0,x$n.samples-x$n.burn))
     }
-    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)', ...)
+    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)', xlim=c(0,x$n.samples-x$n.burn))
   } else{
     par(mfrow = c(2,1))
-    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)', ...)
+    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)', xlim=c(0,x$n.samples-x$n.burn))
     plotlims = c(max(0,min(x$t.samp[,1])-.05),min(1,max(x$t.samp[,1])+.05))
-    plot(x$t.samp[,1],type='l',ylab=labels[1],xlab='MCMC iteration (post-burn)',ylim=plotlims, ...)
+    plot(x$t.samp[,1],type='l',ylab=labels[1],xlab='MCMC iteration (post-burn)',ylim=plotlims, xlim=c(0,x$n.samples-x$n.burn))
   }
 }
 
