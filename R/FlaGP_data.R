@@ -144,41 +144,43 @@ get_obs_basis = function(sim.basis,Y.obs,y.ind.sim,y.ind.obs,sigma.y=NULL){
 # X (numeric) : untransformed matrix of inputs
 # V.t (numeric) : matrix
 # ls_prior_ab (numeric) : 2 vector of parameters for gamma prior on length-scales
-mv_lengthscales = function(XT.data,V.t,g=1e-7,subsample=NULL,seed=NULL,ls.prior=F){
+mv_lengthscales = function(XT.data,V.t,g=1e-7,subsample=F,m=2,K=1,seed=NULL,ls.prior=F){
   ptm = proc.time()
   XT = cbind(XT.data$sim$X$trans,XT.data$sim$T$trans)
-  if(!is.null(subsample)){
-    if(!is.null(seed)){
-      set.seed(seed)
-    }
-    samp.id = sample(1:nrow(XT),subsample)
-    XT = XT[samp.id,]
-    V.t = V.t[,samp.id]
-  }
   p.x = XT.data$p.x
   p.t = XT.data$p.t
   n.pc = nrow(V.t)
-
   dConfig = laGP::darg(d=list(mle = TRUE, max = 100),X = XT)
   if(!ls.prior){dConfig$ab = c(0,0)}
-  GPlist = vector(mode='list',length=n.pc)
-  for(i in 1:n.pc){
-    GPlist[[i]] = laGP::newGPsep(X = XT,
-                           Z = V.t[i, ],
-                           d = rep(dConfig$start, ncol(XT)),
-                           g = g,
-                           dK = TRUE)
-  }
-  # try doParallel::foreach (not sure how to use it with pointers to C objects)
-  cores = min(n.pc,parallel::detectCores()-4)
-  estLenscales = parallel::mclapply(1:n.pc, function(i) laGP::mleGPsep(GPlist[[i]],param='d',
-                                                      tmin = dConfig$min,
-                                                      tmax = dConfig$max,
-                                                      ab=dConfig$ab,
-                                                      maxit=100)$d,
-                                    mc.cores = cores)
-  for(i in n.pc){
-    laGP::deleteGPsep(GPlist[[i]])
+
+  if(subsample){
+    # blhs
+    if(!is.null(seed)){
+      set.seed(seed)
+    }
+    estLenscales = parallel::mclapply(1:n.pc, function(i) laGP::blhs.loop(y=V.t[i,],X=XT,m=m,K=K,da=dConfig,g=g)$that,
+                                      mc.cores = min(n.pc,parallel::detectCores()-4))
+  } else{
+    # use all data
+    GPlist = vector(mode='list',length=n.pc)
+    for(i in 1:n.pc){
+      GPlist[[i]] = laGP::newGPsep(X = XT,
+                             Z = V.t[i, ],
+                             d = rep(dConfig$start, ncol(XT)),
+                             g = g,
+                             dK = TRUE)
+    }
+    # try doParallel::foreach (not sure how to use it with pointers to C objects)
+    cores = min(n.pc,parallel::detectCores()-4)
+    estLenscales = parallel::mclapply(1:n.pc, function(i) laGP::mleGPsep(GPlist[[i]],param='d',
+                                                        tmin = dConfig$min,
+                                                        tmax = dConfig$max,
+                                                        ab=dConfig$ab,
+                                                        maxit=100)$d,
+                                      mc.cores = cores)
+    for(i in n.pc){
+      laGP::deleteGPsep(GPlist[[i]])
+    }
   }
 
   return = list()
@@ -421,8 +423,8 @@ sc_inputs = function(X,ls){
 #' @param B optional precomputed matrix of basis vectors
 #' @param V.t optional precomputed matrix of simulation weights for B
 #' @param sigma.y assumed standard error of observations (not currently implemented)
-#' @param sc.nugget nugget used for lengthscale estimation GP
-#' @param sc.subsample size of subsample for lengthscale estimation. Default is NULL indicating all data is used for estimation.
+#' @param ls.m m parameter in laGP::blhs controlling data blocking for LHS subsample.
+#' @param ls.K K parameter in laGP::blhs indicating number of replicate estimations to do.
 #' @param ls.prior use detault prior in laGP::newGP for MAP lengthscale estimation, if FALSE, MLE estimation
 #' @param bias calibration with a discrepancy model
 #' @param D matrix of basis vectors for discrepancy model
@@ -436,22 +438,25 @@ sc_inputs = function(X,ls){
 flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                                           # X and T data
                     Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scale=T,scaletype='scalar', # Y data
                     n.pc = NULL, pct.var = .95, B = NULL, V.t = NULL, sigma.y=NULL,                     # sim basis
-                    sc.nugget=1e-7, sc.subsample = NULL, ls.prior=T,                                    # length scale estimation
+                    ls.subsample = F, ls.nugget=1e-7, ls.m = 2, ls.K = 1, ls.prior=T,                                    # length scale estimation
                     bias=F,D=NULL,                                                                      # discrepancy
-                    small=F,verbose=F){                                                                 # additional flags
-  cat('Building FlaGP data object.\n')
-  cat('m:', ncol(Y.sim),'\n')
-  cat('n:', max(0,ncol(Y.obs)),'\n')
-  if(is.null(n.pc)){
-    cat('pct.var:', pct.var,'\n')
-  } else{
-    cat('n.pc:', n.pc,'\n')
+                    small=F,seed=NULL,verbose=T){                                                                 # additional flags
+  # print information about data
+  if(verbose){
+    cat('Building FlaGP data object.\n')
+    cat('m:', ncol(Y.sim),'\n')
+    cat('n:', max(0,ncol(Y.obs)),'\n')
+    if(is.null(n.pc)){
+      cat('pct.var:', pct.var,'\n')
+    } else{
+      cat('n.pc:', n.pc,'\n')
+    }
+    cat('p.x:',max(0,ncol(X.sim)),'\n')
+    cat('p.t:',max(0,ncol(T.sim)),'\n')
+    cat('dim Y.sim:', dim(Y.sim),'\n')
+    cat('dim Y.obs:', dim(Y.obs),'\n')
   }
-  cat('p.x:',max(0,ncol(X.sim)),'\n')
-  cat('p.t:',max(0,ncol(T.sim)),'\n')
-  cat('dim Y.sim:', dim(Y.sim),'\n')
-  cat('dim Y.obs:', dim(Y.obs),'\n')
-
+  # precomputing and data building including lengthscale estimation
   start.time = proc.time()
   if(verbose){cat('transforming X,T... ')}
   XT.data = transform_xt(X.sim,T.sim,X.obs,T.obs)
@@ -474,7 +479,7 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
     precomp = FALSE
   }
   if(verbose){cat('estimating lengthscale parameters... ')}
-  ls = mv_lengthscales(XT.data,basis$sim$V.t,sc.nugget,sc.subsample,ls.prior=ls.prior)
+  ls = mv_lengthscales(XT.data,basis$sim$V.t,ls.nugget,ls.subsample,ls.m,ls.K,seed,ls.prior)
   if(verbose){cat('done.\n')}
   if(verbose){cat('stretching and compressing inputs... ')}
   SC.inputs = get_SC_inputs(ls,XT.data,basis$sim$n.pc)

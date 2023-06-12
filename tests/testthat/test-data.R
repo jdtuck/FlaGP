@@ -44,12 +44,16 @@ test_that("transform_y works", {
   expect_error(FlaGP:::transform_y(test_dat$Y.sim,y.ind.sim=matrix(seq_len(10)),Y.obs=NULL,y.ind.obs=NULL,center=F,scale=F,scaletype='rowwise'), NA)
 })
 
-test_that("get_basis works", {
-
+test_that("basis works", {
+  test_dat = gen_sim_data(100,2)
+  # test with n.pc
+  expect_error(FlaGP:::get_basis(test_dat$Y.sim,n.pc=3), NA)
+  expect_error(FlaGP:::get_obs_basis(FlaGP:::get_basis(test_dat$Y.sim,n.pc=3),test_dat$Y.obs))
+  # test with pct.var
+  expect_error(FlaGP:::get_basis(test_dat$Y.sim,pct.var=.95), NA)
+  expect_error(FlaGP:::get_obs_basis(FlaGP:::get_basis(test_dat$Y.sim,pct.var=.95),test_dat$Y.obs))
 })
-test_that("obs_basis works", {
 
-})
 test_that("mv_lengthscales works", {
 
 })

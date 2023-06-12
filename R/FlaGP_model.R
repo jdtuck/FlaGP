@@ -43,7 +43,7 @@ fit_eta = function(theta,flagp,sample=T,end=50)
   p.t = flagp$XT.data$p.t
   p.x = flagp$XT.data$p.x
 
-  # transform theta by estimated length-scales
+  # theta was sampled on 0-1, so we need to stretch and compress it by our lengthsale estimates
   theta.sc = lapply(1:n.pc, function(jj) theta/sqrt(flagp$lengthscales$T[[jj]]))
   theta.sc.rep = lapply(1:n.pc, function(jj) matrix(theta.sc[[jj]],nrow=n,ncol=p.t,byrow = T))
 
@@ -222,7 +222,7 @@ garg = function(g, y){
     r2s <- (y - mean(y))^2
 
   ## check for starting value
-  # added that g$start >= sqrt(.Machine$double.eps) becuase that's the min, and there will be an error if start<min
+  # added that g$start >= sqrt(.Machine$double.eps) because that's the min, and there will be an error if start<min
   if(is.null(g$start)) g$start <- max(sqrt(.Machine$double.eps),as.numeric(quantile(r2s, p=0.025)))
   ## check for max value
   if(is.null(g$max)) {

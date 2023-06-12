@@ -50,7 +50,8 @@ for(i in 1:n){
 ```
 
 ```{r build FlaGP data object}
-flagp.data = flagp(X.sim,T.sim,X.obs,T.obs,Y.sim,y.ind.sim,Y.obs,y.ind.obs,n.pc = 3)
+flagp.data = flagp(X.sim,T.sim,X.obs,T.obs,Y.sim,y.ind.sim,Y.obs,y.ind.obs,n.pc = 3,
+                   ls.subsample = T)
 ```
 
 ```{r plot data}
