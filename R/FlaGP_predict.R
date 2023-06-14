@@ -285,8 +285,8 @@ mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples 
     for(i in 1:n.samples){
       returns$delta.samp[i,,] = returns$delta.samp[i,,] * ysd
     }
-    returns$delta.mean = apply(delta.samp,2:3,mean)
-    returns$delta.conf.int = apply(delta.samp,2:3,quantile,c(.025,.975))
+    returns$delta.mean = apply(returns$delta.samp,2:3,mean)
+    returns$delta.conf.int = apply(returns$delta.samp,2:3,quantile,c(.025,.975))
   }
   if(!return.samples)
     returns$y.samp = NULL
