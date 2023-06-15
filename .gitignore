@@ -4,9 +4,6 @@ dev
 # ignore DS_store
 .DS_Store
 
-# ignore examples folder
-examples
-
 # ignore .RData files
 *.RData
 .Rproj.user
