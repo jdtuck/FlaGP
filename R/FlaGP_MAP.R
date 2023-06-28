@@ -16,18 +16,20 @@ map = function(flagp,n.restarts=1,init=NULL,seed=1,
                 theta.prior='beta',ssq.prior='gamma'){
 
   p.t = flagp$XT.data$p.t
-  # n.restarts cannot be greater than our set of initial values
   if(!is.null(init)){
-    if(length(init) != p.t){
-      stop("init should be a vector of length p.t")
+    # if init passed, check for correct dimensions
+    if(ncol(init) != p.t){
+      stop("init should be a matrix with p.t columns")
     }
-    init = matrix(init,nrow=1,ncol=p.t)
+    n.restarts = nrow(init)
   } else{
-    init = matrix(rep(.5,p.t),nrow=1)
-  }
-  if(n.restarts>1){
-    set.seed(seed)
-    init = rbind(init,lhs::maximinLHS(max(2,n.restarts-1),p.t))
+    # if init not passed generate with LHS
+    if(n.restarts>1){
+      set.seed(seed)
+      init = rbind(init,lhs::maximinLHS(max(2,n.restarts),p.t))
+    } else{
+      init = matrix(rep(.5,p.t),nrow=1)
+    }
   }
 
   out = NULL

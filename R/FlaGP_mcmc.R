@@ -204,7 +204,7 @@ mcmc = function(flagp,t.init=NULL,cov.init=NULL,
   #   C.store = NULL
   # }
 
-  cat('MCMC Start #--',format(Sys.time(), "%a %b %d %X"),'--#\n')
+  if(verbose){cat('MCMC Start #--',format(Sys.time(), "%a %b %d %X"),'--#\n')}
   for(i in 1:n.samples){
     if(verbose){
       if(i %% 1000 == 0){
