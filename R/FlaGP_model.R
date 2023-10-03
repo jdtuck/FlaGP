@@ -3,18 +3,19 @@ fit_model = function(theta,flagp,
                      lite=T,sample=T,
                      end.eta=50,
                      lagp.delta=F,start.delta=6,end.delta=50,
-                     negll=F,theta.prior='beta',ssq.prior='gamma'){
+                     negll=F,theta.prior='beta',theta.prior.params=c(2,2),
+                     ssq.prior.params=c(1,1e-3),map=F){
 
   # Predict from emulator at [X.obs,theta]
-  eta = FlaGP:::fit_eta(theta,flagp,sample,end.eta)
+  eta = FlaGP:::fit_eta(theta,flagp,sample,end.eta,ssq.prior.params,map=map)
 
   if(flagp$bias){
-    delta = FlaGP:::fit_delta(eta$y.resid,flagp$basis$obs$D,flagp$XT.data,sample=sample,lagp=lagp.delta,start=start.delta,end=end.delta)
+    delta = FlaGP:::fit_delta(eta$y.resid,flagp$basis$obs$D,flagp$XT.data,sample=sample,lagp=lagp.delta,start=start.delta,end=end.delta,ssq.prior.params = ssq.prior.params,map=map)
   } else{
     delta = NULL
   }
 
-  ll = FlaGP:::compute_ll(theta,eta,delta,sample,flagp,theta.prior,ssq.prior)
+  ll = FlaGP:::compute_ll(theta,eta,delta,sample,flagp,theta.prior,theta.prior.params,ssq.prior.params)
 
   if(lite){
     return(ifelse(negll,-ll,ll))
@@ -36,7 +37,7 @@ fit_model = function(theta,flagp,
 }
 
 # fit modular emulator with t=theta
-fit_eta = function(theta,flagp,sample=T,end=50)
+fit_eta = function(theta,flagp,sample=T,end=50,ssq.prior.params,map)
 {
   n = flagp$Y.data$n
   n.pc = flagp$basis$sim$n.pc
@@ -65,20 +66,28 @@ fit_eta = function(theta,flagp,sample=T,end=50)
                    sample=sample)
 
   # residuals
-  y.resid = flagp$Y.data$obs$trans - w_to_y(w$sample,flagp$basis$obs$B)
-  ssq.hat = mean(y.resid^2)
+  y.pred = w_to_y(w$sample,flagp$basis$obs$B)
+  y.resid = flagp$Y.data$obs$trans - y.pred
+
+  # conjugate posterior
+  rtr = apply(y.resid,2,function(x) t(x) %*% x)
+  n.s2 = prod(dim(flagp.data$Y.data$obs$trans))
+  if(!map){
+    ssq.hat = invgamma::rinvgamma(1,ssq.prior.params[1]+n.s2/2,ssq.prior.params[2]+sum(rtr)/2)
+  } else{
+    # mean of inv gamma for MAP
+    ssq.hat = (ssq.prior.params[2]+sum(rtr)/2)/(ssq.prior.params[1]+n.s2/2-1)
+  }
 
   return(list(w=w,y.resid=y.resid,ssq.hat=ssq.hat))
 }
 
 # fit delta model to residuals using basis vectors in D
-fit_delta = function(y.resid,D,XT.data,sample=T,lagp=F,start=6,end=50){
+fit_delta = function(y.resid,D,XT.data,sample=T,lagp=F,start=6,end=50,ssq.prior.params,map){
   returns = list()
   v = NULL
   n.pc = ncol(D)
-  # .95 is somewhat arbitrary here, the thought is that we really want to avoid over-fitting the bias model,
-  # which is why the default isn't something like .99
-  V.t = get_basis(y.resid,pct.var=.95,B=D)$V.t
+  V.t = get_basis(y.resid,B=D)$V.t
   if(lagp){ # use laGP for a faster bias model
     v = append(v,aGPsep_SC_mv(X=XT.data$obs$X$trans,
                               Z=V.t,
@@ -124,7 +133,15 @@ fit_delta = function(y.resid,D,XT.data,sample=T,lagp=F,start=6,end=50){
   returns$v = v
   returns$V.t = V.t
   returns$y.resid = y.resid - w_to_y(v$sample,D)
-  returns$ssq.hat = mean(y.resid^2)
+
+  rtr = apply(returns$y.resid,2,function(x) t(x) %*% x)
+  n.s2 = prod(dim(flagp.data$Y.data$obs$trans))
+  if(!map){
+    returns$ssq.hat = invgamma::rinvgamma(1,ssq.prior.params[1]+n.s2/2,ssq.prior.params[2]+sum(rtr)/2)
+  } else{
+    # mean of inv gamma for MAP
+    returns$ssq.hat = (ssq.prior.params[2]+sum(rtr)/2)/(ssq.prior.params[1]+n.s2/2-1)
+  }
   returns$lagp = lagp
   return(returns)
 }
@@ -159,7 +176,7 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, 
   var = array(dim=c(n.pc,n.XX))
 
   if(bias){
-    # if we use laGP for the bias, we cannot use stretched an compressed inputs anymore
+    # if we use laGP for the bias, we cannot use stretched an compressed inputs anymore so default to alc criterion
     lagp_fit = lapply(1:n.pc,function(i) laGP::aGPsep(X = X,
                                                 Z = Z[i,],
                                                 XX = XX,
@@ -184,8 +201,11 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, 
         var[i,] = lagp_fit[[i]]$var
       }
     } else{
-      # compute neighbors using ANN
+      # compute neighbors using ANN -- for small n.pc (2) and large m (10000) lapply is faster than parallel, probably overhead with parallel
       nn.indx = lapply(1:n.pc,function(i) yaImpute::ann(X[[i]],XX[[i]],end,verbose=F)$knnIndexDist[,1:end])
+      # foreach can be faster depending on n.pc and the number of available cores. We have not tried to explicitly dermine where this tradeoff lives
+      # nn.indx = foreach::foreach(i=1:n.pc) %dopar% yaImpute::ann(X[[i]],XX[[i]],end,verbose=F)$knnIndexDist[,1:end]
+
       for(j in 1:n.XX){
         lagp_fit = lapply(1:n.pc,function(i) laGP::newGP(
           X = X[[i]][nn.indx[[i]][j,],],
@@ -198,6 +218,10 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, 
           var[i,j] = lagp_pred[[i]]$s2
           laGP::deleteGP(lagp_fit[[i]])
         }
+        # using newGP/predGP limits us to the exponential covariance. If we write these GP functions by hand we can use the matern
+        # Ex.
+        # nu = 7/2
+        # C = fields::Matern(distances::distances(X[[i]][nn.indx[[i]][j,],]),smoothness = nu)
       }
     }
   }

@@ -5,76 +5,85 @@ date: "2/23/2022"
 output: pdf_document
 ---
 
-```{r , echo=FALSE}
-C_true = .24
-g_true = 9.8
-sd_true = 0
-d_at_t = function(C,t,m,g){
-  return((1/C)*log(cosh(t/(sqrt(m/(g*C))))))
-}
-d_at_t_sim = function(C,t,m,g){
-  return((1/C)*log(cosh(t/((m/(g*C)^(1/3))))))
-}
+This tutorial updates the ball drop example from ball_drop_unbiased.Rmd to demonstrate biased calibration.
 
+```{r , echo=FALSE}
+C_true = .15
+g_true = 9.8
+sd_true = 0.1
+t_at_d = function(C,d,R,g){
+  (acosh(exp(C*d/R)))/(sqrt(C*g/R))
+}
+t_at_d_sim = function(C,d,R,g){
+  (acosh(exp(C*d/R)))/((C*g/R)^(1/3))
+}
 p.x = 1
 p.t = 2
 n = 5
-m = 98
+m = 578
 
 # sim data
 set.seed(11)
 XT.sim = lhs::create_oalhs(m,p.t+p.x,T,F)
-X.range = c(.1,5) # mass of ball in kg
-T.range = matrix(c(.01,1,8,12),nrow=p.t,ncol=2,byrow = T)
+X.range = c(.025,.3) # Radius of ball
+T.range = matrix(c(.01,.15,8,12),nrow=p.t,ncol=2,byrow = T)
 X.sim=as.matrix(XT.sim[,1]); X.sim = X.sim * (X.range[2]-X.range[1]) + X.range[1]
 T.sim=as.matrix(XT.sim[,2:3])
 T.sim[,1] = T.sim[,1] * (T.range[1,2]-T.range[1,1]) + T.range[1,1]
 T.sim[,2] = T.sim[,2] * (T.range[2,2]-T.range[2,1]) + T.range[2,1]
 rm(XT.sim)
-y.ind.sim = as.matrix(seq(0.5,5,.1))
+y.ind.sim = as.matrix(seq(1,25,1))
 Y.sim = matrix(nrow=length(y.ind.sim),ncol=m)
 for(i in 1:m){
-  Y.sim[,i] = d_at_t_sim(C=T.sim[i,1],t=y.ind.sim,m=X.sim[i],g=T.sim[i,2])
+  Y.sim[,i] = t_at_d_sim(C=T.sim[i,1],d=y.ind.sim,R=X.sim[i],g=T.sim[i,2])
 }
 # obs data
-X.obs = as.matrix(rep(seq(.5,4.5,length.out=n)))
+X.obs = as.matrix(rep(seq(.05,.25,length.out=n)))
 T.obs = matrix(c(rep(C_true,n),rep(g_true,n)),nrow=n,ncol=2)
-y.ind.obs = as.matrix(seq(.5,5,length.out=10))
+y.ind.obs = as.matrix(seq(5,20,5))
 Y.obs = matrix(nrow=length(y.ind.obs),ncol=n)
 for(i in 1:n){
-    Y.obs[,i] = d_at_t(C=C_true,t=y.ind.obs,m=X.obs[i],g=g_true) + rnorm(length(y.ind.obs),0,sd_true)
+    Y.obs[,i] = t_at_d(C=C_true,d=y.ind.obs,R=X.obs[i],g=g_true) + rnorm(length(y.ind.obs),0,sd_true)
 }
+plot.sample = sample(1:m,100)
+matplot(y.ind.sim,Y.sim[,plot.sample],type='l',lty=1,col='darkorange',xlab='distance (m)',ylab='time (s)')
+matplot(y.ind.obs,Y.obs,type='l',lty=1,col='black',add=T)
 ```
 
-Look at bias to get an idea of basis functions for bias model. 
+For this toy example we can examine the bias and see that it is approximately linear, motivating two basis functions for the discrepancy, a constant shift and a slope change.
+
 ```{r bias, echo=F}
 Y.sim.theta = matrix(nrow=length(y.ind.obs),ncol=n)
 for(i in 1:n){
-    Y.sim.theta[,i] = d_at_t_sim(C=C_true,t=y.ind.obs,m=X.obs[i],g=g_true)
+    Y.sim.theta[,i] = t_at_d_sim(C=C_true,d=y.ind.obs,R=X.obs[i],g=g_true)
 }
-matplot(Y.obs-Y.sim.theta,type='l',lty=1)
+matplot(y.ind.obs,Y.obs-Y.sim.theta,type='l',lty=1,xlab='distance (m)',ylab='time bias (s)')
 # linear basis functions
 D = cbind(1,y.ind.sim)
-D = D/sqrt(max(t(D)%*%D))
+D = D/sqrt(max(t(D)%*%D))/2
+matplot(D,type='l',ylim=c(0,.2))
 ```
 
 ```{r build FlaGP data object}
 flagp.data = flagp(X.sim,T.sim,X.obs,T.obs,Y.sim,y.ind.sim,Y.obs,y.ind.obs,
-                           center = T, scaletype = 'scalar', n.pc = 2, verbose = T,bias = T, D = D)
+                   center = T, scaletype = 'scalar', n.pc = 2, verbose = T,
+                   bias = T, D = D)
 ```
 
 ```{r plot data}
 plot(flagp.data,xlab='time (s)',ylab='distance (m)')
 ```
 
-# Calibrate C
+# Calibrate C,g
 
 ```{r mcmc, echo=F}
-flagp.mcmc = mcmc(flagp.data, n.samples = 10000, n.burn = 1000, end.eta = 50, theta.prior = 'unif')
-flagp.mcmc$time
+flagp.mcmc = mcmc(flagp.data, n.samples = 5000, n.burn = 1000, end.eta = 50)
 ```
 
 # Plot MCMC results for diagnostics
+
+For this example, the data is not able to constrain $g$ and the posterior samples look nearly like the $Beta(2,2)$ prior.
+
 ```{r plot mcmc, echo=F}
 plot(flagp.mcmc,labels=c("C","g"),xlim=c(0,1))
 ```
@@ -87,37 +96,52 @@ flagp.map$theta.hat
 # Prediction at new locations
 
 ```{r, echo=F}
-X.pred = matrix(seq(.5,4,length.out=3))
+X.pred = matrix(seq(.05,.25,length.out=5))
 
-y.pred.mcmc = predict(flagp.data,flagp.mcmc,X.pred,samp.ids = as.integer(seq(1,9000,length.out=1000)),support = 'sim',end.eta = 50)
+y.pred.mcmc = predict(flagp.data,flagp.mcmc,X.pred,samp.ids = as.integer(seq(1,4000,length.out=250)),support = 'sim',end.eta = 50,return.eta=T,return.delta=T)
+
 y.pred.map = predict(flagp.data,flagp.map,X.pred,n.samples=1000,support="sim", end.eta = 50)
 
 ```
 
+Posterior uncertainty for MCMC predictions is quite large given the parameter uncertainty.
+
 ```{r, compare predictions to data}
-true_dat = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
-for(i in 1:ncol(true_dat)){
-  true_dat[,i] = d_at_t(C_true,y.ind.sim,X.pred[i],g_true)
+Y.pred = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
+for(i in 1:ncol(Y.pred)){
+  Y.pred[,i] = t_at_d(C_true,y.ind.sim,X.pred[i],g_true)
 }
 
 matplot(y.pred.map$y.mean,type='l',lty=2,main='MAP')
-matplot(true_dat,type='l',lty=1,add=T)
+matplot(Y.pred,type='l',lty=1,add=T)
 matplot(y.pred.map$y.conf.int[1,,],type='l',lty=3,add=T)
 matplot(y.pred.map$y.conf.int[2,,],type='l',lty=3,add=T)
 
 matplot(y.pred.mcmc$y.mean,type='l',lty=2,main='MCMC')
-matplot(true_dat,type='l',lty=1,add=T)
+matplot(Y.pred,type='l',lty=1,add=T)
 matplot(y.pred.mcmc$y.conf.int[1,,],type='l',lty=3,add=T)
 matplot(y.pred.mcmc$y.conf.int[2,,],type='l',lty=3,add=T)
 
 # RMSE
-rmse.mcmc = sqrt(mean((y.pred.mcmc$y.mean-true_dat)^2))
-rmse.map = sqrt(mean((y.pred.map$y.mean-true_dat)^2))
+rmse.mcmc = sqrt(mean((y.pred.mcmc$y.mean-Y.pred)^2))
+rmse.map = sqrt(mean((y.pred.map$y.mean-Y.pred)^2))
 
 # Interval Score
-is.mcmc = mean(FlaGP:::interval_score(true_dat,y.conf=y.pred.mcmc$y.conf.int))
-is.map = mean(FlaGP:::interval_score(true_dat,y.conf=y.pred.map$y.conf.int))
+is.mcmc = mean(FlaGP:::interval_score(Y.pred,y.conf=y.pred.mcmc$y.conf.int))
+is.map = mean(FlaGP:::interval_score(Y.pred,y.conf=y.pred.map$y.conf.int))
 
 cat('mcmc prediction scores:\nrmse:',rmse.mcmc,'\ninterval score:',is.mcmc,'\n')
 cat('map prediction scores:\nrmse:',rmse.map,'\ninterval score:',is.map,'\n')
+```
+
+Notice that the uncertainty in the mcmc predictions is significant. Both the emulator and discrepancy predictions have significant uncertainty.
+
+```{r}
+matplot(y.pred.mcmc$eta.mean,type='l',lty=1,ylim=c(0,20))
+matplot(y.pred.mcmc$eta.conf.int[1,,],type='l',lty=3,add=T)
+matplot(y.pred.mcmc$eta.conf.int[2,,],type='l',lty=3,add=T)
+
+matplot(y.pred.mcmc$delta.mean,type='l',lty=1,ylim=c(-5,5))
+matplot(y.pred.mcmc$delta.conf.int[1,,],type='l',lty=3,add=T)
+matplot(y.pred.mcmc$delta.conf.int[2,,],type='l',lty=3,add=T)
 ```

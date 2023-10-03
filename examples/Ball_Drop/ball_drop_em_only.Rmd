@@ -5,38 +5,47 @@ date: "2/23/2022"
 output: pdf_document
 ---
 
-In this example we consider the experiment of dropping different sized balls from a tower and recording the time at certain distances during the fall. We will generate time data at distance traveled d from the equation $$
+In this example we consider the experiment of dropping balls of varying radii from a tower and recording the time at certain distances during the fall. We will generate time data at distance $d$ from the equation $$
 t(d) = \frac{acosh(\exp\{Cd/R\})}{\sqrt{Cg/R}}
-$$ where $C$ is the coefficient of drag, $R$ is the radius of the ball, and $g$ is the gravitational constant. The computer simulations will be evaluated over a space filling design of $(R,C,g)$ tuples in the domain $R\in(.025,.3),\;C\in(.05,.15),\;g\in(7.8,10.8)$.
+$$ where $C$ is the coefficient of drag, $R$ is the radius of the ball, and $g$ is the gravitational constant. The computer simulations will be evaluated over a space filling design of $(R,C)$ pairs in the domain $R\in(.1,2),\;C\in(.01,.5)$.
 
-During this tutorial we will detail how to do emulation, calibration, and prediction using our library functions.
+This tutorial details emulation and prediction using library functions.
 
 ```{r , echo=FALSE}
-d_at_t = function(C,t,m,g){
-  return((1/C)*log(cosh(t/(sqrt(m/(g*C))))))
+t_at_d = function(C,d,R,g){
+  (acosh(exp(C*d/R)))/(sqrt(C*g/R))
 }
 
-p.x = 3
+# number of x inputs
+p.x = 2
+# number of simulations
 m = 10082
 
 # sim data
 set.seed(11)
+# create design over (R,C) on [0,1]
 X.sim = lhs::create_oalhs(m,p.x,T,F)
-X.range = matrix(c(.1,5,.01,.5,8,12),nrow=p.x,ncol=2,byrow = T)
-X.sim[,1] = X.sim[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
+# put inputs on physically relavant scale
+X.range = matrix(c(.1,2,.01,.5),nrow=p.x,ncol=2,byrow = T)
 X.sim[,1] = X.sim[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
 X.sim[,2] = X.sim[,2] * (X.range[2,2]-X.range[2,1]) + X.range[2,1]
-y.ind.sim = as.matrix(seq(0,5,.1))
+plot.sample = sample(1:10000,1000)
+pairs(X.sim[plot.sample,],labels = c('R','C'))
+
+# generate simulations
+y.ind.sim = as.matrix(seq(1,25,1)) # distance (meters)
 Y.sim = matrix(nrow=length(y.ind.sim),ncol=m)
 for(i in 1:m){
-  Y.sim[,i] = d_at_t(C=X.sim[i,2],t=y.ind.sim,m=X.sim[i,1],g=X.sim[i,3])
+  Y.sim[,i] = t_at_d(C=X.sim[i,2],d=y.ind.sim,R=X.sim[i,1],g=9.8)
 }
+matplot(Y.sim[,plot.sample],type='l',xlab='distance (m)',ylab='time (s)',lty=2)
 ```
 
 ```{r build FlaGP data object}
-flagp.data = flagp(X.sim=X.sim,Y.sim=Y.sim,y.ind.sim = y.ind.sim,
-                  center = T, scaletype = 'scalar', n.pc = 2, verbose = T,
-                  sc.subsample = 500)
+flagp.data = flagp(X.sim = X.sim, Y.sim = Y.sim, y.ind.sim = y.ind.sim, n.pc = 2,
+                  center = T, scale = T, scaletype = 'rowwise', 
+                  ls.subsample = T, ls.m = 25,ls.K = 3, # set m & K for fast lengthscale estimation
+                  verbose=T) 
 ```
 
 ```{r, echo=F}
@@ -45,16 +54,17 @@ plot(flagp.data,xlab='time (s)',ylab='distance (m)')
 
 # Prediction
 
+We generate new synthetic data and compare predictions to data. This problem is incredibly simple, and we have a huge number of data points (10,000) in only 2 input dimensions, so predictions are accurate and emulator uncertainty is very small.
+
 ```{r, echo=F}
 set.seed(11)
 n.pred = 16
 X.pred = lhs::create_oalhs(n.pred,p.x,T,F)
 X.pred[,1] = X.pred[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
-X.pred[,1] = X.pred[,1] * (X.range[1,2]-X.range[1,1]) + X.range[1,1]
 X.pred[,2] = X.pred[,2] * (X.range[2,2]-X.range[2,1]) + X.range[2,1]
 Y.pred = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
 for(i in 1:ncol(Y.pred)){
-  Y.pred[,i] = (d_at_t(C=X.pred[i,2],t=y.ind.sim,m=X.pred[i,1],g=X.pred[i,3]) - flagp.data$Y.data$sim$mean) / flagp.data$Y.data$sim$sd[1]
+  Y.pred[,i] = (t_at_d(C=X.pred[i,2],d=y.ind.sim,R=X.pred[i,1],g=9.8))
 }
 
 flagp.pred = predict(flagp.data,
@@ -62,19 +72,15 @@ flagp.pred = predict(flagp.data,
                      support = "sim",
                      n.samples = 1000,
                      return.samples = F,
-                     conf.int = F, native = F,
-                     end.eta = 750, ann=F)
-cat('pred time NN:',flagp.pred$pred.time[3],'s \n')
-cat('RMSE NN:',mean(sqrt((flagp.pred$y.mean - Y.pred)^2)),'\n')
+                     conf.int = T, native = T,
+                     end.eta = 250, ann=T)
+cat('pred time:',flagp.pred$pred.time[3],'s \n')
+cat('RMSE:',mean(sqrt((flagp.pred$y.mean - Y.pred)^2)),'\n')
+cat('MAPE:',median(100*abs((flagp.pred$y.mean - Y.pred)/Y.pred)),'\n')
 
-# now time with ANN
-flagp.pred.ann = predict(flagp.data,
-                     X.pred.orig=X.pred,
-                     support = "sim",
-                     n.samples = 1000,
-                     return.samples = F,
-                     conf.int = F, native = F,
-                     end.eta = 750, ann=T)
-cat('pred time ANN:',flagp.pred.ann$pred.time[3],'s \n')
-cat('RMSE ANN:',mean(sqrt((flagp.pred.ann$y.mean - Y.pred)^2)),'\n')
+plot.id = c(1,5,10)
+matplot(Y.pred[,plot.id],type='l',col='black',lty=1,xlab='distance (m)',ylab='time (s)')
+matplot(flagp.pred$y.mean[,plot.id],type='l',lty=1,col='darkorange',add=T)
+matplot(flagp.pred$y.conf.int[1,,plot.id],type='l',lty=2,col='lightblue',add=T)
+matplot(flagp.pred$y.conf.int[2,,plot.id],type='l',lty=2,col='lightblue',add=T)
 ```

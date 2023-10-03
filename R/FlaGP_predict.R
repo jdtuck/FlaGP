@@ -122,14 +122,30 @@ mv_delta_predict = function(X.pred.orig,delta,flagp,sample=F,n.samples=1, start=
 #' @title FlaGP Prediction
 #'
 #' @description Prediction with \code{mcmc} or \code{map} object
+#' @param flagp an flagp data object.
 #' @param model an \code{mcmc} or \code{map} object.
+#' @param X.pred.orig new X for prediction on original scale
+#' @param n.samples number of samples from the predictive distribution
+#' @param samp.ids which mcmc samples should be used for prediction
+#' @param return.samples return samples along with mean and confidence interval
+#' @param support predict on support of simulations or observations
+#' @param end.eta neighborhood size for lagp prediction
+#' @param lagp.delta if a discrepancy model is fit, should discrepancy predictions be made with laGP? Default is a full GP.
+#' @param start.delta initial lagp neighborhood size for discrepancy. Only relevant if lagp.delta = T
+#' @param end.delta final lagp neighborhood size for discrepancy. Only relevant if lagp.delta = T
+#' @param return.eta return emulator predictions
+#' @param return.delta return discrepenacy predictions
+#' @param y return predictions in scaled y space, rather than basis space
+#' @param native return y predictions on native scale
+#' @param conf.int return 95% confidence interval for predictions
+#' @param ann use yaImpute::ann to determine neighborhood, rather than laGP's default neighbor search (faster)
 #' @details Returns predictions at X.pred.orig
 #' @export
 #' @examples
 #' # See examples folder for R markdown notebooks.
 #'
 predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=NULL,return.samples=F,support='obs',
-                         end.eta=50,lagp.delta=F,start.delta=6,end.delta=50,return.eta=F,return.delta=F, native = T, conf.int=F, ann=T)
+                         end.eta=50,lagp.delta=F,start.delta=6,end.delta=50,return.eta=F,return.delta=F, y=T, native = T, conf.int=F, ann=T)
 {
   if(!is.null(model)){
     if(class(model)[1] == 'mcmc'){
@@ -143,7 +159,7 @@ predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=
     cat('No calibration model, emulation only prediction.')
     if(is.null(X.pred.orig))
       stop('must give X.pred.orig')
-    pred = em_only_predict(flagp,X.pred.orig,n.samples,return.samples,support,end.eta,native,conf.int,ann=ann)
+    pred = em_only_predict(flagp,X.pred.orig,n.samples,return.samples,support,end.eta,y,native,conf.int,ann=ann)
   }
 
   return(pred)
@@ -285,8 +301,8 @@ mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples 
     for(i in 1:n.samples){
       returns$delta.samp[i,,] = returns$delta.samp[i,,] * ysd
     }
-    returns$delta.mean = apply(delta.samp,2:3,mean)
-    returns$delta.conf.int = apply(delta.samp,2:3,quantile,c(.025,.975))
+    returns$delta.mean = apply(returns$delta.samp,2:3,mean)
+    returns$delta.conf.int = apply(returns$delta.samp,2:3,quantile,c(.025,.975))
   }
   if(!return.samples)
     returns$y.samp = NULL
@@ -297,30 +313,32 @@ mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples 
   return(returns)
 }
 
-em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, support='obs', end.eta = 50, native = T, conf.int = F, ann = NULL)
+em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, support='obs', end.eta = 50, y = T, native = T, conf.int = F, ann = NULL)
 {
   start.time = proc.time()
   returns = list()
   n.pred = nrow(X.pred.orig)
   # get predictive samples of w at X.pred.orig
-  w = predict_w(flagp,X.pred.orig,end = end.eta,sample = T,n.samples = n.samples, ann = ann)
+  w = predict_w(flagp,X.pred.orig,end = end.eta,sample = ifelse(n.samples>0,T,F),n.samples = n.samples, ann = ann)
+  returns$pred.time = proc.time() - start.time
   returns$w = w
   # convert samples of w to samples of y on native scale
-  returns$y.samp = array(0,dim=c(n.samples,flagp$Y.data$sim$n.y,n.pred))
-  for(i in 1:n.samples){
-    returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample[i,,])
-    if(native){
-      for(j in 1:n.pred){
-        returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+  if(y){
+    returns$y.samp = array(0,dim=c(n.samples,flagp$Y.data$sim$n.y,n.pred))
+    for(i in 1:n.samples){
+      returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample[i,,])
+      if(native){
+        for(j in 1:n.pred){
+          returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+        }
       }
     }
+    # can probably do B*w_mean
+    returns$y.mean = apply(returns$y.samp,2:3,mean)
+    if(conf.int)
+      returns$y.conf.int = apply(returns$y.samp,2:3,quantile,c(.025,.975))
+    if(!return.samples)
+      returns$y.samp = NULL
   }
-
-  returns$pred.time = proc.time() - start.time
-  returns$y.mean = apply(returns$y.samp,2:3,mean)
-  if(conf.int)
-    returns$y.conf.int = apply(returns$y.samp,2:3,quantile,c(.025,.975))
-  if(!return.samples)
-    returns$y.samp = NULL
   return(returns)
 }

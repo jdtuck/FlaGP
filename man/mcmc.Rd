@@ -10,8 +10,8 @@ mcmc(
   cov.init = NULL,
   n.samples = 10000,
   n.burn = 1000,
-  update.freq = 100,
-  stop.update = 10000,
+  update.every = 1,
+  stop.update = 1000,
   end.eta = 50,
   lagp.delta = F,
   start.delta = 6,
@@ -33,7 +33,7 @@ mcmc(
 
 \item{n.burn}{integer number of initial samples to discard}
 
-\item{update.freq}{integer sample frequency that proposal covariance should be updated}
+\item{update.every}{integer sample frequency that proposal covariance should be updated}
 
 \item{stop.update}{integer sample index where proposal covariance updates should stop}
 

@@ -14,26 +14,71 @@ flagp(
   Y.obs = NULL,
   y.ind.obs = NULL,
   center = T,
+  scale = T,
   scaletype = "scalar",
-  n.pc = 1,
-  pct.var = NULL,
+  n.pc = NULL,
+  pct.var = 0.95,
   B = NULL,
+  V.t = NULL,
   sigma.y = NULL,
-  sc.nugget = 1e-07,
-  sc.subsample = F,
-  sc.subsample.size = 250,
+  ls.subsample = F,
+  ls.nugget = 1e-07,
+  ls.m = 2,
+  ls.K = 1,
   ls.prior = T,
   bias = F,
   D = NULL,
   small = F,
-  precomp = T,
-  verbose = F
+  seed = NULL,
+  verbose = T
 )
 }
 \arguments{
 \item{X.sim}{experimental inputs for simulator output data}
 
 \item{T.sim}{calibration inputs for simulator output data}
+
+\item{X.obs}{observed inputs for experimental data}
+
+\item{T.obs}{optional "known" calibration parameters for observations. This parameter does nothing in the model, but the data object will store scaled copies of it so it can be compared to calibration results}
+
+\item{Y.sim}{simulator output matrix}
+
+\item{y.ind.sim}{data indices for functional response simulations}
+
+\item{Y.obs}{observed data matrix}
+
+\item{y.ind.obs}{data indices for functional response observations}
+
+\item{center}{center simulations to mean zero}
+
+\item{scale}{scale simulations to unit variance}
+
+\item{scaletype}{"scalar" or "rowwise" scaling to unit variance. Functional outputs should likely use "scalar" and multivariate outputs with different units should use "rowwise"}
+
+\item{n.pc}{number of basis components to use for emulation. Defaults to 95\% variance explained.}
+
+\item{pct.var}{choose number of basis components s.t. this proportion of variation is accounted for in simulations. Defaults to 95\% variance explained.}
+
+\item{B}{optional precomputed matrix of basis vectors}
+
+\item{V.t}{optional precomputed matrix of simulation weights for B}
+
+\item{sigma.y}{assumed standard error of observations (not currently implemented)}
+
+\item{ls.m}{m parameter in laGP::blhs controlling data blocking for LHS subsample.}
+
+\item{ls.K}{K parameter in laGP::blhs indicating number of replicate estimations to do.}
+
+\item{ls.prior}{use detault prior in laGP::newGP for MAP lengthscale estimation, if FALSE, MLE estimation}
+
+\item{bias}{calibration with a discrepancy model}
+
+\item{D}{matrix of basis vectors for discrepancy model}
+
+\item{small}{return small (memory) data object}
+
+\item{verbose}{print status updates while building data object and doing precomputing}
 }
 \description{
 Builds FlaGP data object and does necessary precomputing

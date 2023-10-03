@@ -6,8 +6,8 @@
 \usage{
 \method{predict}{flagp}(
   flagp,
-  model,
-  X.pred.orig,
+  model = NULL,
+  X.pred.orig = NULL,
   n.samples = 1,
   samp.ids = NULL,
   return.samples = F,
@@ -15,7 +15,12 @@
   end.eta = 50,
   lagp.delta = F,
   start.delta = 6,
-  end.delta = 50
+  end.delta = 50,
+  return.eta = F,
+  return.delta = F,
+  native = T,
+  conf.int = F,
+  ann = T
 )
 }
 \arguments{

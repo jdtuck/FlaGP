@@ -4,15 +4,21 @@ mcmc_ss = function(flagp,t.init,n.samples=100,n.burn=0,
                    end.eta=50,
                    lagp.delta=F,start.delta=6,end.delta=50,
                    adapt=T,target.accept=.3,
-                   theta.prior='beta',ssq.prior='gamma',verbose=T)
+                   theta.prior='beta',theta.prior.params=c(2,2),
+                   ssq.prior.params=c(1,1e-3),verbose=T)
 {
   ptm = proc.time()[3]
   bias = flagp$bias
   p.t = flagp$XT.data$p.t
   n.pc = flagp$basis$sim$n.pc
 
+  # if(n.pc>1){
+  #   cl = parallel::makeCluster(min(n.pc,detectCores(logical = TRUE)-4))
+  #   doParallel::registerDoParallel(cl)
+  # }
+
   t.curr = t.init
-  #llt = fit_model(t.curr,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,ssq.prior)
+  #llt = fit_model(t.curr,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,theta.prior.params,ssq.prior.params)
   #ssq = llt$ssq.hat
   #w = llt$eta$w$sample
   #v = llt$delta$v$sample
@@ -43,12 +49,12 @@ mcmc_ss = function(flagp,t.init,n.samples=100,n.burn=0,
       if(t.prop[j]<0 | t.prop[j]>1){
         ll.prop$ll = -Inf
       } else{
-        ll.prop = fit_model(t.prop,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,ssq.prior)
+        ll.prop = fit_model(t.prop,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,theta.prior.params,ssq.prior.params)
       }
 
       # we have to recompute this to account for the variability in the likelihood at t.curr,
       # otherwise, the chain does not mix well.
-      llt = fit_model(t.curr,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,ssq.prior)
+      llt = fit_model(t.curr,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,theta.prior.params,ssq.prior.params)
 
       # 4. Accept or reject t
       if(runif(1) < exp(ll.prop$ll - llt$ll)){
@@ -62,6 +68,7 @@ mcmc_ss = function(flagp,t.init,n.samples=100,n.burn=0,
     }
     # store w,v,ssq after both updates have been made
     ssq.store[i] = ssq
+
     #w.store[i,,] = w
     GPs.store[[i]] = llt
     ll.store[i] = llt$ll
@@ -81,7 +88,8 @@ mcmc_ss = function(flagp,t.init,n.samples=100,n.burn=0,
     }
   }
   mcmc.time = proc.time()[3] - ptm
-
+  # if(n.pc>1)
+  #   parallel::stopCluster(cl)
   returns = list(t.samp=t.store[(n.burn+1):n.samples,,drop=F],
                  ssq.samp=ssq.store[(n.burn+1):n.samples],
                  ll.samp=ll.store[(n.burn+1):n.samples],
@@ -150,7 +158,7 @@ tune_step_sizes = function(flagp,n.samples,n.levels,target.accept.rate=NULL,min.
 #' @param start.delta initial neighborhood size for bias model. Only applicable if lagp.delta=T
 #' @param end.delta final neighborhood size for bias model. Only applicable if lagp.delta=T
 #' @param theta.prior prior for calibration parameters, 'beta' or 'unif'
-#' @param ssq.prior prior for error variance, 'gamma' is a non-informative gamma on the precision
+#' @param ssq.prior.params gamma prior parameters for error variance facilitating conjugate updating
 #' @param prev.samples Use in accordance with add_samples(). A matrix of samples can be passed in to be used for proposal covariance estimation.
 #' @param verbose print status updates
 #' @details Returns predictions at X.pred.orig
@@ -163,11 +171,16 @@ mcmc = function(flagp,t.init=NULL,cov.init=NULL,
                       update.every=1,stop.update=1000,
                       end.eta=50,
                       lagp.delta=F,start.delta=6,end.delta=50,
-                      theta.prior='beta',ssq.prior='gamma',prev.samples=NULL,
+                      theta.prior='beta',theta.prior.params=c(2,2),
+                      ssq.prior.params=c(1,1e-3),prev.samples=NULL,
                       verbose=T)
 {
   ptm = proc.time()[3]
-
+  # n.pc = flagp$basis$sim$n.pc
+  # if(n.pc>1){
+  #   cl = parallel::makeCluster(min(n.pc,parallel::detectCores(logical = TRUE)-1))
+  #   doParallel::registerDoParallel(cl)
+  # }
   # constants and initializations
   bias = flagp$bias
   p.t = flagp$XT.data$p.t
@@ -217,12 +230,14 @@ mcmc = function(flagp,t.init=NULL,cov.init=NULL,
     if(any(t.prop<0) | any(t.prop>1)){
       ll.prop$ll = -Inf
     } else{
-      ll.prop = fit_model(t.prop,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,ssq.prior)
+      ll.prop = fit_model(t.prop,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,
+                          theta.prior,theta.prior.params,ssq.prior.params)
     }
 
     # we have to recompute this every time to account for the variability in the likelihood at t.curr,
     # otherwise, the chain does not mix well.
-    llt = fit_model(t.curr,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,theta.prior,ssq.prior)
+    llt = fit_model(t.curr,flagp,F,T,end.eta,lagp.delta,start.delta,end.delta,F,
+                    theta.prior,theta.prior.params,ssq.prior.params)
 
     # 4. Accept or reject t
     accept.prob =  exp(ll.prop$ll - llt$ll)
@@ -259,6 +274,8 @@ mcmc = function(flagp,t.init=NULL,cov.init=NULL,
       t.mean = (1/i)*((i-1)*t.mean + t.curr)
     }
   }
+  # if(n.pc>1)
+  #   parallel::stopCluster(cl)
   mcmc.time = proc.time()[3] - ptm
 
   return.ids = (n.burn+1):n.samples

@@ -133,7 +133,6 @@ get_obs_basis = function(sim.basis,Y.obs,y.ind.sim,y.ind.obs,sigma.y=NULL){
       obs.basis$D = sim.basis$D
     }
   }
-  obs.basis$V.t = solve(t(obs.basis$B)%*%obs.basis$B)%*%t(obs.basis$B)%*%Y.obs
   return(obs.basis)
 }
 
@@ -420,11 +419,11 @@ sc_inputs = function(X,ls){
 #' @param scaletype "scalar" or "rowwise" scaling to unit variance. Functional outputs should likely use "scalar" and multivariate outputs with different units should use "rowwise"
 #' @param n.pc number of basis components to use for emulation. Defaults to 95% variance explained.
 #' @param pct.var choose number of basis components s.t. this proportion of variation is accounted for in simulations. Defaults to 95% variance explained.
-#' @param B optional precomputed matrix of basis vectors
+#' @param B optional matrix of basis vectors, if null B is computed via SVD(Y.sim)
 #' @param V.t optional precomputed matrix of simulation weights for B
 #' @param sigma.y assumed standard error of observations (not currently implemented)
-#' @param ls.m m parameter in laGP::blhs controlling data blocking for LHS subsample.
-#' @param ls.K K parameter in laGP::blhs indicating number of replicate estimations to do.
+#' @param ls.m m parameter in laGP::blhs controlling data blocking for LHS subsample. Larger m will result in faster lengthscale estimation.
+#' @param ls.K K parameter in laGP::blhs indicating number of bootstrap replicate estimations to do.
 #' @param ls.prior use detault prior in laGP::newGP for MAP lengthscale estimation, if FALSE, MLE estimation
 #' @param bias calibration with a discrepancy model
 #' @param D matrix of basis vectors for discrepancy model
@@ -438,9 +437,9 @@ sc_inputs = function(X,ls){
 flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                                           # X and T data
                     Y.sim,y.ind.sim=NULL,Y.obs=NULL,y.ind.obs=NULL,center=T,scale=T,scaletype='scalar', # Y data
                     n.pc = NULL, pct.var = .95, B = NULL, V.t = NULL, sigma.y=NULL,                     # sim basis
-                    ls.subsample = F, ls.nugget=1e-7, ls.m = 2, ls.K = 1, ls.prior=T,                                    # length scale estimation
+                    ls.subsample = F, ls.nugget=1e-7, ls.m = 2, ls.K = 1, ls.prior=T,                   # length scale estimation
                     bias=F,D=NULL,                                                                      # discrepancy
-                    small=F,seed=NULL,verbose=T){                                                                 # additional flags
+                    small=F,seed=NULL,verbose=T){                                                       # additional flags
   # print information about data
   if(verbose){
     cat('Building FlaGP data object.\n')

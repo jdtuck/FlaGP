@@ -3,6 +3,7 @@
 S3method(plot,flagp)
 S3method(plot,mcmc)
 S3method(predict,flagp)
+export(contour_pairs)
 export(flagp)
 export(map)
 export(mcmc)

@@ -1,8 +1,8 @@
 
 # w,v are needed if sample=F
 compute_ll = function(theta,eta,delta,sample,flagp,
-                      theta.prior='beta',ssq.prior='gamma',
-                      theta.prior.params=c(2,2),ssq.prior.params=c(1,1e-3)){
+                      theta.prior='beta',theta.prior.params=c(2,2),
+                      ssq.prior.params=c(1,1e-3)){
   if(!is.null(delta)){
     ssq.hat = delta$ssq.hat
     y.resid = delta$y.resid
@@ -13,7 +13,7 @@ compute_ll = function(theta,eta,delta,sample,flagp,
   if(sample){
     # compute simple llh - Sigma_w and Sigma_v are accounted for in calc of y.resid
     ldetS = flagp$Y.data$obs$n.y*log(ssq.hat)
-    Sinv = flagp$precomp$I.n.y/ssq.hat
+    Sinv = flagp$precomp$I.n.y/ssq.hat # Sigma_y is n.y x n.y which can be large, making it diagonal allows for trivial inversion
     ll = apply(y.resid,2,function(d) -.5*(ldetS + d%*%Sinv%*%d))
   } else{
     lambda = 1/ssq.hat
@@ -29,15 +29,5 @@ compute_ll = function(theta,eta,delta,sample,flagp,
   } else if(theta.prior=='unif'){
     p.theta = sum(dunif(theta,0,1,log=T))
   }
-  if(ssq.prior=='gamma'){
-    # gamma prior on the precision - default
-    p.ssq = dgamma(1/ssq.hat,ssq.prior.params[1],ssq.prior.params[2],log=T)
-  } else if(ssq.prior=='unif'){
-    # uniform prior on variance
-    p.ssq = dunif(ssq.hat,0,100,log=T)
-  } else{
-    # common 'reference' prior for GP models
-    p.ssq = -log(ssq.hat)
-  }
-  return(sum(ll) + p.theta + p.ssq)
+  return(sum(ll) + p.theta)
 }
