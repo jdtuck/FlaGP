@@ -313,7 +313,7 @@ mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples 
   return(returns)
 }
 
-em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, support='obs', end.eta = 50, y = T, native = T, conf.int = F, ann = NULL)
+em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, support='obs', end.eta = 50, y = T, native = T, conf.int = F, ann = T)
 {
   start.time = proc.time()
   returns = list()
@@ -324,19 +324,21 @@ em_only_predict = function(flagp, X.pred.orig, n.samples = 1, return.samples=F, 
   returns$w = w
   # convert samples of w to samples of y on native scale
   if(y){
-    returns$y.samp = array(0,dim=c(n.samples,flagp$Y.data$sim$n.y,n.pred))
-    for(i in 1:n.samples){
-      returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample[i,,])
-      if(native){
-        for(j in 1:n.pred){
-          returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+    if(conf.int){
+      returns$y.samp = array(0,dim=c(n.samples,flagp$Y.data$sim$n.y,n.pred))
+      for(i in 1:n.samples){
+        returns$y.samp[i,,] = flagp$basis$sim$B %*% drop(w$sample[i,,])
+        if(native){
+          for(j in 1:n.pred){
+            returns$y.samp[i,,j] = returns$y.samp[i,,j] * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+          }
         }
       }
-    }
-    # can probably do B*w_mean
-    returns$y.mean = apply(returns$y.samp,2:3,mean)
-    if(conf.int)
+      returns$y.mean = apply(returns$y.samp,2:3,mean)
       returns$y.conf.int = apply(returns$y.samp,2:3,quantile,c(.025,.975))
+    } else{
+      returns$y.mean = flagp$basis$sim$B%*%returns$w$mean * flagp$Y.data$sim$sd + flagp$Y.data$sim$mean
+    }
     if(!return.samples)
       returns$y.samp = NULL
   }
