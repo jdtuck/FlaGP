@@ -65,11 +65,10 @@ interval_score = function(y,alpha=.05,y.samp=NULL,y.conf.int=NULL,terms=F){
   }
 }
 
-plot_basis = function(b,y.ind.sim,legend=T,xlab='x')
+plot_basis = function(b,Y.obs,y.ind.sim,legend=T,xlab='x')
 {
 
   w = b$sim$V.t
-  z = b$obs$V.t
   n.pc = nrow(w)
   m = ncol(w)
 
@@ -80,7 +79,9 @@ plot_basis = function(b,y.ind.sim,legend=T,xlab='x')
   }
 
   # plot simulation and observed basis weights
-  if(!is.null(z)){
+  if(!is.null(Y.obs)){
+    BtB = t(b$obs$B)%*%b$obs$B + diag(sqrt(.Machine$double.eps),ncol(b$obs$B))
+    z = chol2inv(chol(BtB))%*%t(b$obs$B)%*%Y.obs
     n = ncol(z)
     if(n.pc>1){
       pairs(rbind(t(w),t(z)),col=c(rep('blue',m),rep('orange',n)),pch=c(rep(1,m),rep(16,n)),labels=paste0('PC ',1:n.pc),
@@ -157,7 +158,7 @@ plot.flagp = function(flagp,basis=T,legend=T,xlab='x',ylab='y',...){
   }
 
   if(basis){
-    plot_basis(flagp$basis,flagp$Y.data$sim$ind,legend,xlab,...)
+    plot_basis(flagp$basis,flagp.data$Y.data$obs$trans,flagp$Y.data$sim$ind,legend,xlab,...)
   }
 }
 
@@ -207,3 +208,79 @@ plot.mcmc = function(x, labels=NULL, nrow=2, ncol=2, ...){
   }
 }
 
+#' @title Plot MCMC posteriors
+#'
+#' @description Pairs plot of posterior density estimates and prior distributions. This function is currently only implemented for a specific ball drop function. In future development it will be generalized.
+#' @param theta.list list of matrices containing posterior samples
+#' @param map output from map estimation
+#' @param truth optional vector of known parameter values
+#' @param cols colors for posterior density estimate plots
+#' @param labels legend names for posterior density estimates
+#' @export
+#'
+contour_pairs = function(theta.list,map=NULL,C.min=0,C.max=1,g.min=0,g.max=1,
+                         cols=c('cornflowerblue','darkorange','forestgreen'),
+                         labels=c('FlaGP'))
+{
+  n.theta = length(theta.list)
+  if(length(cols)<n.theta){
+    cols = 1:n.theta
+  } else{
+    cols = cols[1:n.theta]
+  }
+
+  par(mfrow=c(2,2),mar=c(2,2,.5,.5))
+
+  # C posterior
+  C.dens = list(n.theta)
+  max = 0
+  for(i in 1:n.theta){
+    C.dens[[i]] = density(theta.list[[i]][,1],from=C.min,to=C.max)
+    M = max(C.dens[[i]]$y)
+    if(M>max)
+      max = M
+  }
+
+  # plot 1,1
+  plot(c(),c(),xlim=c(C.min,C.max),ylim=c(0,max),lty=2,xlab='',yaxt='n')
+  for(i in 1:n.theta){
+    lines(C.dens[[i]],col=cols[i])
+    if(!is.null(map)){
+      abline(v=map$theta.hat[1],col='darkred',lty=2)
+      labels = c(labels,'MAP')
+      if(i==1)
+        cols = c(cols,'darkred')
+    }
+  }
+
+  legend(inset=c(.05,.05),'topright',legend='C',cex=1.5,bty='n')
+  # plot 1,2 is just the legend
+  plot.new()
+  legend('center',legend=labels,lty=c(1,1,2),col=cols,cex=1.2)
+
+  # g posterior
+  for(i in 1:n.theta){
+    if(i==1){
+      contour(MASS::kde2d(theta.list[[i]][,1], theta.list[[i]][,2]),nlevels = 10,col=cols[i],xlim=c(C.min,C.max),ylim=c(g.min,g.max))
+    } else{
+      contour(MASS::kde2d(theta.list[[i]][,1], theta.list[[i]][,2]),nlevels = 10,add=T,col=cols[i])
+    }
+  }
+
+  g.dens = list(n.theta)
+  max = 0
+  for(i in 1:n.theta){
+    g.dens[[i]] = density(theta.list[[i]][,2],from=g.min,to=g.max)
+    M = max(g.dens[[i]]$y)
+    if(M>max)
+      max = M
+  }
+  plot(c(),c(),type='l',xlim=c(g.min,g.max),ylim=c(0,max),lty=2,xlab='',yaxt='n')
+  for(i in 1:n.theta){
+    lines(g.dens[[i]],col=cols[i])
+    if(!is.null(map))
+      abline(v=map$theta.hat[2],col='darkred',lty=2)
+  }
+
+  legend(inset=c(-.05,0),'topleft',legend='g',cex=1.5,bty='n')
+}
