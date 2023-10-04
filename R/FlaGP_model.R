@@ -202,7 +202,7 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, 
       }
     } else{
       # compute neighbors using ANN -- for small n.pc (2) and large m (10000) lapply is faster than parallel, probably overhead with parallel
-      nn.indx = lapply(1:n.pc,function(i) yaImpute::ann(X[[i]],XX[[i]],end,verbose=F)$knnIndexDist[,1:end])
+      nn.indx = lapply(1:n.pc,function(i) yaImpute::ann(X[[i]],XX[[i]],end,verbose=F)$knnIndexDist[,1:end,drop=F])
       # foreach can be faster depending on n.pc and the number of available cores. We have not tried to explicitly dermine where this tradeoff lives
       # nn.indx = foreach::foreach(i=1:n.pc) %dopar% yaImpute::ann(X[[i]],XX[[i]],end,verbose=F)$knnIndexDist[,1:end]
 
