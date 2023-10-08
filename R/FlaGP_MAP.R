@@ -36,34 +36,56 @@ map = function(flagp,n.restarts=1,init=NULL,seed=1,
   out = NULL
   time = proc.time()[3]
   # try doParallel::foreach or parLapply
-  cores = min(n.restarts,parallel::detectCores()-4)
-  cl <- parallel::makeCluster(cores)
-  outi = parallel::mclapply(1:n.restarts, function(i) crs::snomadr(fit_model, n = p.t, bbin = rep(0, p.t), bbout = 0,
-                 x0 = init[i,],
-                 lb = rep(0, p.t),
-                 ub = rep(1, p.t),
-                 random.seed = seed,
-                 opts = opts,
-                 print.output=F,
-                 flagp = flagp,
-                 lite=T,negll=T,
-                 sample=F,
-                 end.eta=end.eta,
-                 lagp.delta=lagp.delta,
-                 start.delta=start.delta,
-                 end.delta=end.delta,
-                 theta.prior=theta.prior,
-                 theta.prior.params=theta.prior.params,
-                 ssq.prior.params=ssq.prior.params,
-                 map=T),mc.cores=min(parallel::detectCores()-1,n.restarts))
-  obj = Inf
-  parallel::stopCluster(cl)
-  for(i in 1:n.restarts){
+  if(n.restarts>1){
+    cores = min(n.restarts,parallel::detectCores()-4)
+    cl <- parallel::makeCluster(cores)
+    outi = parallel::mclapply(1:n.restarts, function(i) crs::snomadr(fit_model, n = p.t, bbin = rep(0, p.t), bbout = 0,
+                                                                     x0 = init[i,],
+                                                                     lb = rep(0, p.t),
+                                                                     ub = rep(1, p.t),
+                                                                     random.seed = seed,
+                                                                     opts = opts,
+                                                                     print.output=F,
+                                                                     flagp = flagp,
+                                                                     lite=T,negll=T,
+                                                                     sample=F,
+                                                                     end.eta=end.eta,
+                                                                     lagp.delta=lagp.delta,
+                                                                     start.delta=start.delta,
+                                                                     end.delta=end.delta,
+                                                                     theta.prior=theta.prior,
+                                                                     theta.prior.params=theta.prior.params,
+                                                                     ssq.prior.params=ssq.prior.params,
+                                                                     map=T),mc.cores=min(parallel::detectCores()-1,n.restarts))
+    obj = Inf
+    parallel::stopCluster(cl)
+    for(i in 1:n.restarts){
       if(outi[[i]]$objective<obj){
-          out = outi[[i]]
-          obj = out$objective
+        out = outi[[i]]
+        obj = out$objective
       }
+    }
+  } else{
+    out = crs::snomadr(fit_model, n = p.t, bbin = rep(0, p.t), bbout = 0,
+                       x0 = init,
+                       lb = rep(0, p.t),
+                       ub = rep(1, p.t),
+                       random.seed = seed,
+                       opts = opts,
+                       print.output=F,
+                       flagp = flagp,
+                       lite=T,negll=T,
+                       sample=F,
+                       end.eta=end.eta,
+                       lagp.delta=lagp.delta,
+                       start.delta=start.delta,
+                       end.delta=end.delta,
+                       theta.prior=theta.prior,
+                       theta.prior.params=theta.prior.params,
+                       ssq.prior.params=ssq.prior.params,
+                       map=T)
   }
+
   opt.time = proc.time()[3] - time
   return = fit_model(out$solution,flagp,lite=F,sample=F,end.eta=end.eta,
                      lagp.delta=lagp.delta,start.delta=start.delta,end.delta=end.delta,

@@ -208,7 +208,7 @@ aGPsep_SC_mv = function(X, Z, XX, start=6, end=50, g=1/10000, bias=F, sample=F, 
 
       for(j in 1:n.XX){
         lagp_fit = lapply(1:n.pc,function(i) laGP::newGP(
-          X = X[[i]][nn.indx[[i]][j,],],
+          X = X[[i]][nn.indx[[i]][j,],,drop=F],
           Z = Z[i,nn.indx[[i]][j,]],
           d = 1,
           g = g))

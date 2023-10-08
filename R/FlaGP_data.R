@@ -37,7 +37,11 @@ get_basis = function(Y, n.pc = NULL, pct.var = .95, full.basis=F, B=NULL, V.t = 
     if(!rsvd){
       svdY = svd(Y)
     } else{
-      svdY = rsvd(Y,k,nu,nv,p,q,sdist)
+      if(!is.null(n.pc)){
+        svdY = rsvd::rsvd(Y,k=n.pc)
+      } else{
+        stop('n.pc must be specified for rsvd.')
+      }
     }
     return.list$svd.time = proc.time()[3] - ptm
     return.list$B = svdY$u %*% diag(svdY$d) / sqrt(nExp)
@@ -439,7 +443,8 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
                     n.pc = NULL, pct.var = .95, B = NULL, V.t = NULL, sigma.y=NULL,                     # sim basis
                     ls.subsample = F, ls.nugget=1e-7, ls.m = 2, ls.K = 1, ls.prior=T,                   # length scale estimation
                     bias=F,D=NULL,                                                                      # discrepancy
-                    small=F,seed=NULL,verbose=T){                                                       # additional flags
+                    small=F,seed=NULL,verbose=T,
+                    rsvd = F){                                                       # additional flags
   # print information about data
   if(verbose){
     cat('Building FlaGP data object.\n')
@@ -465,7 +470,8 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
   if(verbose){cat('done.\n')}
   if(verbose){cat('computing sim basis... ')}
   basis = list(); class(basis) = c('basis',class(basis))
-  basis$sim = get_basis(Y.data$sim$trans,n.pc,pct.var,F,B,V.t,bias=bias,D=D)
+  basis$sim = get_basis(Y.data$sim$trans,n.pc,pct.var,F,B,V.t,bias=bias,D=D,
+                        rsvd=rsvd)
   if(verbose){cat('done.\n')}
   if(!is.null(Y.obs)){
     precomp = TRUE
@@ -494,7 +500,6 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
     if(verbose){cat('precomputing for fast calibration... ')}
     # do precomputing necessary for calibration
     precomp = list()
-    precomp$I.n.y = diag(1,Y.data$obs$n.y)
     BD = cbind(basis$obs$B,basis$obs$D)
     tBD = t(BD)
     precomp$rankBD = pracma::Rank(BD)
@@ -502,7 +507,7 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
     precomp$BDtBDinv = solve(BDtBD + 1e-8*diag(1,nrow(BDtBD)))
     precomp$ldetBDtBD = determinant(BDtBD)$modulus
     precomp$BDtBDinvtBD = precomp$BDtBDinv%*%tBD
-    precomp$LLHmat = precomp$I.n.y-BD%*%precomp$BDtBDinv%*%tBD
+    precomp$LLHmat = diag(1,Y.data$obs$n.y)-BD%*%precomp$BDtBDinv%*%tBD
     data$precomp = precomp
     if(verbose){cat('done.\n')}
   } else{
@@ -517,35 +522,4 @@ flagp = function(X.sim=NULL,T.sim=NULL,X.obs=NULL,T.obs=NULL,                   
   # how can I return the objects in data without making a copy? I need to give it a class.
   class(data) = c('flagp',class(data))
   return(data)
-}
-get_calib_data = function(flagp){
-
-  # store the objects needed for calibration in an object smaller than flagp, which can be inefficient to pass around through functions
-  flagp = flagp
-  # remove the things from flagp that are expensive to pass around during MCMC and aren't needed
-  flagp$Y.data$sim = NULL
-  flagp$Y.data$obs$orig = NULL
-  flagp$XT.data$sim = NULL; flagp$XT.data$obs = NULL
-  flagp$basis$sim$V.t = NULL
-  flagp$basis$obs$V.t = NULL
-  flagp$SC.inputs$X.sim = NULL; flagp$SC.inputs$T.sim = NULL; flagp$SC.inputs$T.obs = NULL
-
-  flagp$n = flagp$Y.data$n
-  flagp$n.y = flagp$Y.data$obs$n.y
-  flagp$I.n.y = diag(1,flagp$n.y)
-  flagp$BD = cbind(flagp$basis$obs$B,flagp$basis$obs$D)
-  flagp$tBD = t(flagp$BD)
-  flagp$rankBD = rankMatrix(flagp$BD)
-  flagp$BDtBD = flagp$tBD%*%flagp$BD
-  if(flagp$rankBD != ncol(flagp$BD)){
-    flagp$BDtBDinv = solve(flagp$BDtBD + 1e-8*diag(1,nrow(flagp$BDtBD)))
-  } else{
-    flagp$BDtBDinv = solve(flagp$BDtBD) # need to get rid of solves to make code faster
-  }
-  flagp$ldetBDtBD = determinant(flagp$BDtBD)$modulus
-  flagp$BDtBDinvtBD = flagp$BDtBDinv%*%flagp$tBD
-  flagp$LLHmat = flagp$I.n.y-flagp$BD%*%flagp$BDtBDinv%*%flagp$tBD
-  flagp$Z = lapply(1:flagp$basis$sim$n.pc,function(jj) flagp$basis$sim$V.t[jj,])
-  ####
-  return(flagp)
 }

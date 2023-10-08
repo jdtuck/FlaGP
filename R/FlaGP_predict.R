@@ -33,6 +33,21 @@ predict_w = function(flagp,X.pred.orig=NULL,theta=NULL,end=50,sample=F,n.samples
     XX = lapply(1:n.pc,function(i) X$X.obs[[i]])
     X = X$XT.sim
 
+    # Idea: screen variables by lengthscale: if we can remove unimportant inputs, nn calcs will be faster
+    # Results: on the Al-5083 loocv study from the publication we found that even a tiny cuttoff significantly effected prediction accuracy.
+    ### DEV
+    # ls.cuttoff = .01
+    # for(i in 1:n.pc){
+    #   keep.inputs = which(flagp$lengthscales$X[[i]]>ls.cuttoff)
+    #   if(length(keep.inputs)==0){
+    #     # none of the lengthscales were greater than the cuttoff, try just keeping the best input
+    #     keep.inputs = which.max(flagp$lengthscales$X[[i]])
+    #   }
+    #   XX[[i]] = XX[[i]][,keep.inputs,drop=F]
+    #   X[[i]] = X[[i]][,keep.inputs,drop=F]
+    # }
+    ### DEV
+
     w = aGPsep_SC_mv(X=X,
                      Z=flagp$basis$sim$V.t,
                      XX=XX,
@@ -145,13 +160,14 @@ mv_delta_predict = function(X.pred.orig,delta,flagp,sample=F,n.samples=1, start=
 #' # See examples folder for R markdown notebooks.
 #'
 predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=NULL,return.samples=F,support='obs',
-                         end.eta=50,lagp.delta=F,start.delta=6,end.delta=50,return.eta=F,return.delta=F, y=T, native = T, conf.int=F, ann=T)
+                         end.eta=50,lagp.delta=F,start.delta=6,end.delta=50,return.eta=F,return.delta=F, y=T, native = T, conf.int=F, ann=T,
+                         resid.error = F)
 {
   if(!is.null(model)){
     if(class(model)[1] == 'mcmc'){
-      pred = mcmc_predict(flagp,model,X.pred.orig,samp.ids,n.samples,return.samples,support,end.eta,start.delta,end.delta,return.eta,return.delta)
+      pred = mcmc_predict(flagp,model,X.pred.orig,samp.ids,n.samples,return.samples,support,end.eta,start.delta,end.delta,return.eta,return.delta,resid.error=resid.error)
     } else if(class(model)[1] == 'map'){
-      pred = map_predict(flagp,model,X.pred.orig,n.samples,return.samples,support,end.eta,start.delta,end.delta)
+      pred = map_predict(flagp,model,X.pred.orig,n.samples,return.samples,support,end.eta,start.delta,end.delta,resid.error=resid.error)
     } else{
       stop('model must be of class mcmc or map')
     }
@@ -166,7 +182,7 @@ predict.flagp = function(flagp,model=NULL,X.pred.orig=NULL,n.samples=1,samp.ids=
 }
 
 map_predict = function(flagp,map,X.pred.orig=NULL,n.samples=1,return.samples=F,support='obs',
-                       end.eta=50,start.delta=6,end.delta=50)
+                       end.eta=50,start.delta=6,end.delta=50,resid.error=F)
 {
   start.time = proc.time()[3]
   returns = list()
@@ -183,6 +199,12 @@ map_predict = function(flagp,map,X.pred.orig=NULL,n.samples=1,return.samples=F,s
     ysd = flagp$Y.data$sim$sd
     n.y = nrow(flagp$Y.data$sim$orig)
   }
+  n.pc = ncol(B)
+  n.pc.delta = ncol(D)
+
+  if(resid.error)
+    sigma = map$ssq.hat*diag(1,n.y)
+
   # n = 1 if no X model
   n.pred = ifelse(!is.null(X.pred.orig),nrow(X.pred.orig),1)
   # transform_theta
@@ -196,9 +218,15 @@ map_predict = function(flagp,map,X.pred.orig=NULL,n.samples=1,return.samples=F,s
     returns$y.samp = array(dim=c(n.samples,n.y,n.pred))
     for(i in 1:n.pred){
       if(n.samples>1){
-        returns$y.samp[,,i] = t(t(mvtnorm::rmvnorm(n.samples,mean=B%*%w$mean[,i,drop=F],
-                                        sigma = map$ssq.hat*diag(1,n.y) + B%*%diag(w$var[,i])%*%t(B))) *
-          ysd + ym)
+        if(resid.error){
+          returns$y.samp[,,i] = t(t(mvtnorm::rmvnorm(n.samples,mean=B%*%w$mean[,i,drop=F],
+                                                     sigma = sigma + B%*%diag(w$var[,i],nrow=n.pc)%*%t(B))) *
+                                    ysd + ym)
+        } else{
+          returns$y.samp[,,i] = t(t(mvtnorm::rmvnorm(n.samples,mean=B%*%w$mean[,i,drop=F],
+                                                     sigma = B%*%diag(w$var[,i],nrow=n.pc)%*%t(B))) *
+                                    ysd + ym)
+        }
       } else{
         returns$y.samp = B%*%w$mean[,i,drop=F] * ysd + ym
       }
@@ -215,11 +243,16 @@ map_predict = function(flagp,map,X.pred.orig=NULL,n.samples=1,return.samples=F,s
     v = mv_delta_predict(X.pred.orig,map$delta,flagp,F,start=start.delta,end=end.delta)
     for(j in 1:n.pred){
       eta.samp[,,j] = t(mvtnorm::rmvnorm(n.samples,mean=B%*%w$mean[,j,drop=F],
-                                       sigma = B%*%diag(w$var[,j])%*%t(B))) *
+                                       sigma = B%*%diag(w$var[,j],nrow=n.pc)%*%t(B))) *
         ysd + ym
-      delta.samp[,,j] = t(mvtnorm::rmvnorm(n.samples,mean=D%*%v$mean[,j,drop=F],
-                                         sigma = D%*%diag(v$var[,j],nrow=length(v$var[,j]))%*%t(D) +
-                                           map$ssq.hat*diag(n.y) )) * ysd
+      if(resid.error){
+        delta.samp[,,j] = t(mvtnorm::rmvnorm(n.samples,mean=D%*%v$mean[,j,drop=F],
+                                             sigma = D%*%diag(v$var[,j],nrow=n.pc.delta)%*%t(D) +
+                                               sigma )) * ysd
+      } else{
+        delta.samp[,,j] = t(mvtnorm::rmvnorm(n.samples,mean=D%*%v$mean[,j,drop=F],
+                                             sigma = D%*%diag(v$var[,j],nrow=n.pc.delta)%*%t(D))) * ysd
+      }
     }
     returns$y.samp = eta.samp + delta.samp
     returns$time = proc.time()[3] - start.time
@@ -234,7 +267,7 @@ map_predict = function(flagp,map,X.pred.orig=NULL,n.samples=1,return.samples=F,s
 }
 
 mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples = 1, return.samples=F, support='obs',
-                        end.eta = 50, start.delta = 6, end.delta = 50, return.eta = F, return.delta = F)
+                        end.eta = 50, start.delta = 6, end.delta = 50, return.eta = F, return.delta = F, resid.error = F)
 {
   returns = list()
   start.time = proc.time()
@@ -267,19 +300,28 @@ mcmc_predict = function(flagp ,mcmc, X.pred.orig=NULL, samp.ids=NULL, n.samples 
   for(i in 1:n.samples){
     w = predict_w(flagp,X.pred.orig,t.pred[i,],sample=T,end=end.eta)
     returns$eta.samp[i,,] = B%*%drop(w$sample)
-    sigma = ssq.samp[i]*diag(n.y)
+    if(resid.error)
+      sigma = ssq.samp[i]*diag(n.y)
     if(flagp$bias){
       # Biased prediction add delta model
       v = FlaGP:::mv_delta_predict(X.pred.orig,mcmc$delta[[i]],flagp,sample=T,n.samples=1,start=start.eta,end=end.eta)
       returns$delta.samp[i,,] = D%*%drop(v$sample)
       for(j in 1:n.pred){
-        # sigma noise is on standardized scale, so add noise before scaling back to native with ysd and ym
-        returns$y.samp[i,,j] = mvtnorm::rmvnorm(1,mean=returns$eta.samp[i,,j]+returns$delta.samp[i,,j],sigma=sigma) * ysd + ym
+        if(resid.error){
+          # sigma noise is on standardized scale, so add noise before scaling back to native with ysd and ym
+          returns$y.samp[i,,j] = mvtnorm::rmvnorm(1,mean=returns$eta.samp[i,,j]+returns$delta.samp[i,,j],sigma=sigma) * ysd + ym
+        } else{
+          returns$y.samp[i,,j] = (returns$eta.samp[i,,j,drop=F]+returns$delta.samp[i,,j,drop=F]) * ysd + ym
+        }
       }
     } else{
       # Unbiased prediction eta only
       for(j in 1:n.pred){
-        returns$y.samp[i,,j] = mvtnorm::rmvnorm(1,mean=returns$eta.samp[i,,j],sigma=sigma) * ysd + ym
+        if(resid.error){
+          returns$y.samp[i,,j] = mvtnorm::rmvnorm(1,mean=returns$eta.samp[i,,j],sigma=sigma) * ysd + ym
+        } else{
+          returns$y.samp[i,,j] = returns$eta.samp[i,,j,drop=F] * ysd + ym
+        }
       }
     }
   }

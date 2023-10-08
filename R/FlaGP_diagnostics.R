@@ -130,28 +130,30 @@ plot_basis = function(b,Y.obs,y.ind.sim,legend=T,xlab='x')
 #'
 plot.flagp = function(flagp,basis=T,legend=T,xlab='x',ylab='y',...){
   if(ncol(flagp$Y.data$sim$ind == 1)){
-    par(mfrow=c(1,2),mar=c(4,4,4,.3))
-    matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$orig,type='l',col='orange',xlab=xlab,ylab=ylab,main='Original Scale',...)
-    if(!is.null(flagp$Y.data$obs)){
-      if(ncol(flagp$Y.data$obs$ind) == 1){
-        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,pch=1,add=T,col='black',...)
-        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,type='l',lty=1,add=T,col='black',...)
+    if(!is.null(flagp$Y.data$sim$orig)){
+      par(mfrow=c(1,2),mar=c(4,4,4,.3))
+      matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$orig,type='l',col='orange',xlab=xlab,ylab=ylab,main='Original Scale',...)
+      if(!is.null(flagp$Y.data$obs)){
+        if(ncol(flagp$Y.data$obs$ind) == 1){
+          matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,pch=1,add=T,col='black',...)
+          matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,type='l',lty=1,add=T,col='black',...)
+        }
       }
-    }
-    legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
-
-    matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$trans,type='l',col='orange',xlab=xlab,ylab=ylab,main='Standardized Scale',...)
-    if(!is.null(flagp$Y.data$obs)){
-      if(ncol(flagp$Y.data$obs$ind) == 1){
-        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,pch=1,add=T,col='black',...)
-        matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,type='l',lty=1,add=T,col='black',...)
-      }
-    }
-
-    if(!is.null(flagp$Y.data$obs)){
       legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
-    } else{
-      legend('topleft',inset=c(.05,.05),legend=c('simulations'),lty=1,col=c('orange'),...)
+
+      matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$trans,type='l',col='orange',xlab=xlab,ylab=ylab,main='Standardized Scale',...)
+      if(!is.null(flagp$Y.data$obs)){
+        if(ncol(flagp$Y.data$obs$ind) == 1){
+          matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,pch=1,add=T,col='black',...)
+          matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,type='l',lty=1,add=T,col='black',...)
+        }
+      }
+
+      if(!is.null(flagp$Y.data$obs)){
+        legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
+      } else{
+        legend('topleft',inset=c(.05,.05),legend=c('simulations'),lty=1,col=c('orange'),...)
+      }
     }
   }else{
     stop('Default data visualization not implemented for 2-D functions.')
