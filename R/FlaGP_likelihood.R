@@ -13,8 +13,9 @@ compute_ll = function(theta,eta,delta,sample,flagp,
   if(sample){
     # compute simple llh - Sigma_w and Sigma_v are accounted for in calc of y.resid
     ldetS = flagp$Y.data$obs$n.y*log(ssq.hat)
-    Sinv = flagp$precomp$I.n.y/ssq.hat # Sigma_y is n.y x n.y which can be large, making it diagonal allows for trivial inversion
-    ll = apply(y.resid,2,function(d) -.5*(ldetS + d%*%Sinv%*%d))
+    # Don't compute S inverse directly - bad for huge d_y
+    ySinvty = apply(y.resid^2,2,sum)/ssq.hat
+    ll = -.5*(ldetS + ySinvty)
   } else{
     lambda = 1/ssq.hat
     B.hat = flagp$precomp$BDtBDinvtBD%*%y.resid
@@ -24,7 +25,7 @@ compute_ll = function(theta,eta,delta,sample,flagp,
                                         lambda*t(y.resid[,i])%*%flagp$precomp$LLHmat%*%y.resid[,i]) + l_beta_hat[i])
   }
   if(theta.prior=='beta'){
-    # beta prior - defult
+    # beta prior - default
     p.theta = sum(dbeta(theta,theta.prior.params[1],theta.prior.params[2],log=T))
   } else if(theta.prior=='unif'){
     p.theta = sum(dunif(theta,0,1,log=T))
