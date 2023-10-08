@@ -1,9 +1,8 @@
 # ignore development files
 dev
-
 # ignore DS_store
 .DS_Store
-
 # ignore .RData files
 *.RData
 .Rproj.user
+.Rhistory
