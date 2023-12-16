@@ -21,16 +21,20 @@ flagp(
   B = NULL,
   V.t = NULL,
   sigma.y = NULL,
-  ls.subsample = F,
+  ls.subsample = "strat",
   ls.nugget = 1e-07,
-  ls.m = 2,
+  ls.m = 1,
   ls.K = 1,
   ls.prior = T,
+  ls.parallel = T,
+  make.cluster = T,
+  ls.subsample.size = 250,
   bias = F,
   D = NULL,
   small = F,
   seed = NULL,
-  verbose = T
+  verbose = T,
+  rsvd = F
 )
 }
 \arguments{
@@ -60,17 +64,25 @@ flagp(
 
 \item{pct.var}{choose number of basis components s.t. this proportion of variation is accounted for in simulations. Defaults to 95\% variance explained.}
 
-\item{B}{optional precomputed matrix of basis vectors}
+\item{B}{optional matrix of basis vectors, if null B is computed via SVD(Y.sim)}
 
 \item{V.t}{optional precomputed matrix of simulation weights for B}
 
 \item{sigma.y}{assumed standard error of observations (not currently implemented)}
 
-\item{ls.m}{m parameter in laGP::blhs controlling data blocking for LHS subsample.}
+\item{ls.subsample}{type of subsampling procedure for lengthscale estimation. default 'blhs' is bootstrapped block latin hypercube sampling, 'strat' is stratified random sampling, and 'rand' is random sampling. Otherwise no subsampling is used.}
 
-\item{ls.K}{K parameter in laGP::blhs indicating number of replicate estimations to do.}
+\item{ls.nugget}{gp nugget for lengthscale estimation}
+
+\item{ls.m}{m parameter in laGP::blhs controlling data blocking for LHS subsample. Larger m will result in faster lengthscale estimation but is more memory intensive.}
+
+\item{ls.K}{Number of bootstrap replicate estimations to do when ls.subsample is 'blhs','strat', or 'rand'. Estimates can be highly variable for small K.}
 
 \item{ls.prior}{use detault prior in laGP::newGP for MAP lengthscale estimation, if FALSE, MLE estimation}
+
+\item{ls.parallel}{do lengthscale estimation in parallel}
+
+\item{ls.subsample.size}{size of subsamples when ls.subsample is 'strat' or 'rand'}
 
 \item{bias}{calibration with a discrepancy model}
 
@@ -79,6 +91,8 @@ flagp(
 \item{small}{return small (memory) data object}
 
 \item{verbose}{print status updates while building data object and doing precomputing}
+
+\item{rsvd}{use random svd for fast svd calculations on massive Y.sim matrices. Must specify n.pc.}
 }
 \description{
 Builds FlaGP data object and does necessary precomputing

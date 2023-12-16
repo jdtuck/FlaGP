@@ -12,11 +12,12 @@ map(
   opts = list(MAX_BB_EVAL = 10000, INITIAL_MESH_SIZE = 0.1, MIN_POLL_SIZE = "r0.001",
     DISPLAY_DEGREE = 0),
   end.eta = 50,
-  lagp.delta = F,
+  delta.method = "newGP",
   start.delta = 6,
   end.delta = 50,
   theta.prior = "beta",
-  ssq.prior = "gamma"
+  theta.prior.params = c(2, 2),
+  ssq.prior.params = c(1, 0.001)
 )
 }
 \arguments{

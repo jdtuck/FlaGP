@@ -84,31 +84,31 @@ plot_basis = function(b,Y.obs,y.ind.sim,legend=T,xlab='x')
     z = chol2inv(chol(BtB))%*%t(b$obs$B)%*%Y.obs
     n = ncol(z)
     if(n.pc>1){
-      pairs(rbind(t(w),t(z)),col=c(rep('blue',m),rep('orange',n)),pch=c(rep(1,m),rep(16,n)),labels=paste0('PC ',1:n.pc),
+      pairs(rbind(t(w),t(z)),col=c(rep('cornflowerblue',m),rep('darkorange',n)),pch=c(rep(1,m),rep(16,n)),labels=paste0('PC ',1:n.pc),
             oma=c(3,3,3,15))
       if(legend){
         par(xpd = TRUE)
-        legend("bottomright", pch=1, col=c('blue','orange'), legend=c('w','z'))
+        legend("bottomright", pch=1, col=c('cornflowerblue','darkorange'), legend=c('w','z'))
       }
     } else{
-      hist(t(w),col='blue');abline(v=t(z),col='orange')
+      hist(t(w),col='cornflowerblue');abline(v=t(z),col='darkorange')
       if(legend){
-        legend("topright", pch=1, col=c('blue','orange'), legend=c('w','z'))
+        legend("topright", pch=1, col=c('cornflowerblue','darkorange'), legend=c('w','z'))
       }
     }
   } else{
     if(n.pc>1){
       labs = paste0('PC',1:n.pc)
-      pairs(t(w),col=rep('blue',m),pch=1,labels=labs,
+      pairs(t(w),col=rep('cornflowerblue',m),pch=1,labels=labs,
             oma=c(3,3,3,15),asp=1)
       if(legend){
         par(xpd = TRUE)
-        legend("bottomright", pch=1, col=c('blue'), legend=c('w'))
+        legend("bottomright", pch=1, col=c('cornflowerblue'), legend=c('w'))
       }
     } else{
-      hist(t(w),col='blue');
+      hist(t(w),col='cornflowerblue');
       if(legend){
-        legend("topright", pch=1, col=c('blue'), legend=c('w'))
+        legend("topright", pch=1, col=c('cornflowerblue'), legend=c('w'))
       }
     }
   }
@@ -128,20 +128,20 @@ plot_basis = function(b,Y.obs,y.ind.sim,legend=T,xlab='x')
 #' @examples
 #' # See examples folder for R markdown notebooks.
 #'
-plot.flagp = function(flagp,basis=T,legend=T,xlab='x',ylab='y',...){
+plot.flagp = function(flagp,basis=T,legend=T,sim.subsample=1:flagp$Y.data$m,xlab='x',ylab='y',...){
   if(ncol(flagp$Y.data$sim$ind == 1)){
     if(!is.null(flagp$Y.data$sim$orig)){
       par(mfrow=c(1,2),mar=c(4,4,4,.3))
-      matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$orig,type='l',col='orange',xlab=xlab,ylab=ylab,main='Original Scale',...)
+      matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$orig[,sim.subsample],type='l',col='darkorange',xlab=xlab,ylab=ylab,main='Original Scale',...)
       if(!is.null(flagp$Y.data$obs)){
         if(ncol(flagp$Y.data$obs$ind) == 1){
           matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,pch=1,add=T,col='black',...)
           matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$orig,type='l',lty=1,add=T,col='black',...)
         }
       }
-      legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
+      legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('darkorange','black'),...)
 
-      matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$trans,type='l',col='orange',xlab=xlab,ylab=ylab,main='Standardized Scale',...)
+      matplot(flagp$Y.data$sim$ind,flagp$Y.data$sim$trans[,sim.subsample],type='l',col='darkorange',xlab=xlab,ylab=ylab,main='Standardized Scale',...)
       if(!is.null(flagp$Y.data$obs)){
         if(ncol(flagp$Y.data$obs$ind) == 1){
           matplot(flagp$Y.data$obs$ind,flagp$Y.data$obs$trans,pch=1,add=T,col='black',...)
@@ -150,9 +150,9 @@ plot.flagp = function(flagp,basis=T,legend=T,xlab='x',ylab='y',...){
       }
 
       if(!is.null(flagp$Y.data$obs)){
-        legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('orange','black'),...)
+        legend('topleft',inset=c(.05,.05),legend=c('simulations','field obs.'),lty=1,col=c('darkorange','black'),...)
       } else{
-        legend('topleft',inset=c(.05,.05),legend=c('simulations'),lty=1,col=c('orange'),...)
+        legend('topleft',inset=c(.05,.05),legend=c('simulations'),lty=1,col=c('darkorange'),...)
       }
     }
   }else{
@@ -160,7 +160,7 @@ plot.flagp = function(flagp,basis=T,legend=T,xlab='x',ylab='y',...){
   }
 
   if(basis){
-    plot_basis(flagp$basis,flagp.data$Y.data$obs$trans,flagp$Y.data$sim$ind,legend,xlab,...)
+    plot_basis(flagp$basis,flagp$Y.data$obs$trans,flagp$Y.data$sim$ind,legend,xlab,...)
   }
 }
 
@@ -199,14 +199,14 @@ plot.mcmc = function(x, labels=NULL, nrow=2, ncol=2, ...){
     par(mfrow=c(nrow,ncol))
     for(i in 1:p.t){
       plotlims = c(max(0,min(x$t.samp[,i])-.05),min(1,max(x$t.samp[,i])+.05))
-      plot(x$t.samp[,i],type='l',ylab=labels[i],xlab='MCMC iteration (post-burn)',ylim=plotlims, xlim=c(0,x$n.samples-x$n.burn))
+      plot(x$t.samp[,i],type='l',ylab=labels[i],xlab='MCMC iteration (post-burn)',ylim=plotlims)
     }
-    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)', xlim=c(0,x$n.samples-x$n.burn))
+    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)')
   } else{
     par(mfrow = c(2,1))
-    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)', xlim=c(0,x$n.samples-x$n.burn))
+    plot(x$ssq.samp,type='l',ylab='error variance',xlab='MCMC iteration (post-burn)')
     plotlims = c(max(0,min(x$t.samp[,1])-.05),min(1,max(x$t.samp[,1])+.05))
-    plot(x$t.samp[,1],type='l',ylab=labels[1],xlab='MCMC iteration (post-burn)',ylim=plotlims, xlim=c(0,x$n.samples-x$n.burn))
+    plot(x$t.samp[,1],type='l',ylab=labels[1],xlab='MCMC iteration (post-burn)',ylim=plotlims)
   }
 }
 
@@ -222,7 +222,7 @@ plot.mcmc = function(x, labels=NULL, nrow=2, ncol=2, ...){
 #'
 contour_pairs = function(theta.list,map=NULL,C.min=0,C.max=1,g.min=0,g.max=1,
                          cols=c('cornflowerblue','darkorange','forestgreen'),
-                         labels=c('FlaGP'))
+                         labels=NULL)
 {
   n.theta = length(theta.list)
   if(length(cols)<n.theta){
@@ -249,16 +249,17 @@ contour_pairs = function(theta.list,map=NULL,C.min=0,C.max=1,g.min=0,g.max=1,
     lines(C.dens[[i]],col=cols[i])
     if(!is.null(map)){
       abline(v=map$theta.hat[1],col='darkred',lty=2)
-      labels = c(labels,'MAP')
-      if(i==1)
+      if(i==1){
+        labels = c(labels,'MAP')
         cols = c(cols,'darkred')
+      }
     }
   }
 
-  legend(inset=c(.05,.05),'topright',legend='C',cex=1.5,bty='n')
+  legend(inset=c(.05,.05),'topright',legend='C',cex=2,bty='n')
   # plot 1,2 is just the legend
   plot.new()
-  legend('center',legend=labels,lty=c(1,1,2),col=cols,cex=1.2)
+  legend('center',legend=labels,lty=c(1,1,2),col=cols,cex=2)
 
   # g posterior
   for(i in 1:n.theta){
@@ -284,5 +285,5 @@ contour_pairs = function(theta.list,map=NULL,C.min=0,C.max=1,g.min=0,g.max=1,
       abline(v=map$theta.hat[2],col='darkred',lty=2)
   }
 
-  legend(inset=c(-.05,0),'topleft',legend='g',cex=1.5,bty='n')
+  legend(inset=c(-.05,0),'topleft',legend='g',cex=2,bty='n')
 }

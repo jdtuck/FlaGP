@@ -8,7 +8,7 @@
   flagp,
   model = NULL,
   X.pred.orig = NULL,
-  n.samples = 1,
+  n.samples = 0,
   samp.ids = NULL,
   return.samples = F,
   support = "obs",
@@ -18,13 +18,46 @@
   end.delta = 50,
   return.eta = F,
   return.delta = F,
+  y = T,
   native = T,
   conf.int = F,
-  ann = T
+  resid.error = F,
+  predvar = T,
+  verbose = T
 )
 }
 \arguments{
+\item{flagp}{an flagp data object.}
+
 \item{model}{an \code{mcmc} or \code{map} object.}
+
+\item{X.pred.orig}{new X for prediction on original scale}
+
+\item{n.samples}{number of samples from the predictive distribution}
+
+\item{samp.ids}{which mcmc samples should be used for prediction}
+
+\item{return.samples}{return samples along with mean and confidence interval}
+
+\item{support}{predict on support of simulations or observations}
+
+\item{end.eta}{neighborhood size for lagp prediction}
+
+\item{lagp.delta}{if a discrepancy model is fit, should discrepancy predictions be made with laGP? Default is a full GP.}
+
+\item{start.delta}{initial lagp neighborhood size for discrepancy. Only relevant if lagp.delta = T}
+
+\item{end.delta}{final lagp neighborhood size for discrepancy. Only relevant if lagp.delta = T}
+
+\item{return.eta}{return emulator predictions}
+
+\item{return.delta}{return discrepenacy predictions}
+
+\item{y}{return predictions in scaled y space, rather than basis space}
+
+\item{native}{return y predictions on native scale}
+
+\item{conf.int}{return 95\% confidence interval for predictions}
 }
 \description{
 Prediction with \code{mcmc} or \code{map} object
