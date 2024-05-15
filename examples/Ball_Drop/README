@@ -1,0 +1,9 @@
+The Ball Drop example is a simple and highly modifiable example that is used to demonstrate all the functionality in the FlaGP package. 
+
+There are 4 examples:
+  1. ball_drop_em_only gives and example where only a single dataset is available, and a predictive model is desired. We say 'em_only' to mean emulator only. In the context of computer experiements, this is where only simulated data is available, and no calibration is needed. 
+  2. ball_drop_unbiased extends the emulator only example in 1. to include observed data. The assumption is that the simulator is an unbiased representation of the true physical process, and so no additional discrepancy model is needed.
+  3. ball_drop_biased extends example 2. to the case where the simulator is a biased representation of the physical process, and that bias is accounted for using a discrepancy model. 
+  4. ball_drop_biased_paper is the specific version of the biased ball drop example that is presented in our current manuscript (under review).
+
+These examples are simple, but very useful for understanding how to use the FlaGP code.
