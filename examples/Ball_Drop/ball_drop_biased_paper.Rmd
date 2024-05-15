@@ -37,39 +37,31 @@ flagp.map = map(flagp.data, n.restarts = 5, seed=11)
 flagp.map$theta.hat
 ```
 
-# Prediction at new locations
+# Prediction calibration data
 
 ```{r, echo=F}
-X.pred = matrix(seq(.5,4,length.out=3))
-
-y.pred.mcmc = predict(flagp.data,flagp.mcmc,X.pred,samp.ids = as.integer(seq(1,9000,length.out=1000)),support = 'sim',end.eta = 50)
-y.pred.map = predict(flagp.data,flagp.map,X.pred,n.samples=1000,support="sim", end.eta = 50)
-
+y.pred.mcmc = predict(flagp.data,flagp.mcmc,mvc.data$XT.data$obs$X$orig,samp.ids = as.integer(seq(1,9000,length.out=1000)),support = 'obs',end.eta = 50,conf.int = T)
+y.pred.map = predict(flagp.data,flagp.map,flagp.mcmc,X.pred.orig = mvc.data$XT.data$obs$X$orig,n.samples=1000,support="obs", end.eta = 50,conf.int = T)
 ```
 
-```{r, compare predictions to data}
-true_dat = matrix(nrow=length(y.ind.sim),ncol=nrow(X.pred))
-for(i in 1:ncol(true_dat)){
-  true_dat[,i] = d_at_t(C_true,y.ind.sim,X.pred[i],g_true)
-}
-
+```{r, compare calibrated predictions to data}
 matplot(y.pred.map$y.mean,type='l',lty=2,main='MAP')
-matplot(true_dat,type='l',lty=1,add=T)
+matplot(mvc.data$Y.data$obs$orig,type='l',lty=1,add=T)
 matplot(y.pred.map$y.conf.int[1,,],type='l',lty=3,add=T)
 matplot(y.pred.map$y.conf.int[2,,],type='l',lty=3,add=T)
 
 matplot(y.pred.mcmc$y.mean,type='l',lty=2,main='MCMC')
-matplot(true_dat,type='l',lty=1,add=T)
+matplot(mvc.data$Y.data$obs$orig,type='l',lty=1,add=T)
 matplot(y.pred.mcmc$y.conf.int[1,,],type='l',lty=3,add=T)
 matplot(y.pred.mcmc$y.conf.int[2,,],type='l',lty=3,add=T)
 
 # RMSE
-rmse.mcmc = sqrt(mean((y.pred.mcmc$y.mean-true_dat)^2))
-rmse.map = sqrt(mean((y.pred.map$y.mean-true_dat)^2))
+rmse.mcmc = sqrt(mean((y.pred.mcmc$y.mean-mvc.data$Y.data$obs$orig)^2))
+rmse.map = sqrt(mean((y.pred.map$y.mean-mvc.data$Y.data$obs$orig)^2))
 
 # Interval Score
-is.mcmc = mean(FlaGP:::interval_score(true_dat,y.conf=y.pred.mcmc$y.conf.int))
-is.map = mean(FlaGP:::interval_score(true_dat,y.conf=y.pred.map$y.conf.int))
+is.mcmc = mean(FlaGP:::interval_score(mvc.data$Y.data$obs$orig,y.conf=y.pred.mcmc$y.conf.int))
+is.map = mean(FlaGP:::interval_score(mvc.data$Y.data$obs$orig,y.conf=y.pred.map$y.conf.int))
 
 cat('mcmc prediction scores:\nrmse:',rmse.mcmc,'\ninterval score:',is.mcmc,'\n')
 cat('map prediction scores:\nrmse:',rmse.map,'\ninterval score:',is.map,'\n')

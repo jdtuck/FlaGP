@@ -238,7 +238,7 @@ map_predict = function(flagp,map,X.pred.orig,n.samples,return.samples,support,
   } else if(flagp$bias){
     # biased prediction
     if(n.samples>1){
-      eps = .Machine$double.eps*diag(n.y)
+      eps = sqrt(.Machine$double.eps)*diag(n.y)
       eta.samp = array(0,dim=c(n.y,n.samples,n.pred))
       delta.samp = array(0,dim=c(n.y,n.samples,n.pred))
 

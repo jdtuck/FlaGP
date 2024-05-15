@@ -42,10 +42,8 @@ matplot(Y.sim[,plot.sample],type='l',xlab='distance (m)',ylab='time (s)',lty=2)
 ```
 
 ```{r build FlaGP data object}
-flagp.data = flagp(X.sim = X.sim, Y.sim = Y.sim, y.ind.sim = y.ind.sim, n.pc = 2,
-                  center = T, scale = T, scaletype = 'rowwise', 
-                  ls.subsample = T, ls.m = 25,ls.K = 3, # set m & K for fast lengthscale estimation
-                  verbose=T) 
+flagp.data = flagp(X.sim = X.sim, Y.sim = Y.sim, n.pc = 2,
+                   ls.m = 5, verbose=T) 
 ```
 
 ```{r, echo=F}
@@ -69,11 +67,8 @@ for(i in 1:ncol(Y.pred)){
 
 flagp.pred = predict(flagp.data,
                      X.pred.orig=X.pred,
-                     support = "sim",
                      n.samples = 1000,
-                     return.samples = F,
-                     conf.int = T, native = T,
-                     end.eta = 250, ann=T)
+                     conf.int = T)
 cat('pred time:',flagp.pred$pred.time[3],'s \n')
 cat('RMSE:',mean(sqrt((flagp.pred$y.mean - Y.pred)^2)),'\n')
 cat('MAPE:',median(100*abs((flagp.pred$y.mean - Y.pred)/Y.pred)),'\n')

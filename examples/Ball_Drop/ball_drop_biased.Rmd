@@ -66,7 +66,7 @@ matplot(D,type='l',ylim=c(0,.2))
 
 ```{r build FlaGP data object}
 flagp.data = flagp(X.sim,T.sim,X.obs,T.obs,Y.sim,y.ind.sim,Y.obs,y.ind.obs,
-                   center = T, scaletype = 'scalar', n.pc = 2, verbose = T,
+                   n.pc = 2, verbose = T,
                    bias = T, D = D)
 ```
 
@@ -98,9 +98,9 @@ flagp.map$theta.hat
 ```{r, echo=F}
 X.pred = matrix(seq(.05,.25,length.out=5))
 
-y.pred.mcmc = predict(flagp.data,flagp.mcmc,X.pred,samp.ids = as.integer(seq(1,4000,length.out=250)),support = 'sim',end.eta = 50,return.eta=T,return.delta=T)
+y.pred.mcmc = predict(flagp.data,flagp.mcmc,X.pred,samp.ids = as.integer(seq(1,4000,length.out=250)),support = 'sim',end.eta = 50,return.eta=T,return.delta=T,conf.int = T)
 
-y.pred.map = predict(flagp.data,flagp.map,X.pred,n.samples=1000,support="sim", end.eta = 50)
+y.pred.map = predict(flagp.data,flagp.map,X.pred,n.samples=1000,support="sim", end.eta = 50, conf.int = T)
 
 ```
 
